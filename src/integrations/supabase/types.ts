@@ -193,6 +193,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_admin_role: { Args: Record<PropertyKey, never>; Returns: boolean }
       has_active_subscription: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
