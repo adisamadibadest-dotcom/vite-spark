@@ -11,7 +11,7 @@ async function fromGoldApi(): Promise<GoldQuote | null> {
     });
     if (!r.ok) return null;
     const j = (await r.json()) as { price?: number };
-    if (typeof j.price === "number" && j.price > 100) {
+    if (typeof j.price === "number" && j.price > 500 && j.price < 10000) {
       return { price: +j.price.toFixed(2), source: "gold-api", fetchedAt: Date.now() };
     }
   } catch {}
@@ -26,7 +26,7 @@ async function fromMetalsLive(): Promise<GoldQuote | null> {
     if (!r.ok) return null;
     const j = (await r.json()) as { items?: { xauPrice?: number }[] };
     const p = j.items?.[0]?.xauPrice;
-    if (typeof p === "number" && p > 100) {
+    if (typeof p === "number" && p > 500 && p < 10000) {
       return { price: +p.toFixed(2), source: "goldprice.org", fetchedAt: Date.now() };
     }
   } catch {}
@@ -34,13 +34,12 @@ async function fromMetalsLive(): Promise<GoldQuote | null> {
 }
 
 export async function handleGoldPrice(): Promise<Response> {
-  const quote = (await fromGoldApi()) ?? (await fromMetalsLive());
-  if (!quote) {
-    return Response.json({ error: "Unable to fetch gold price" }, { status: 502 });
-  }
+  // Race both upstreams in parallel — first sane quote wins (closest to MT5 tick).
+  const quote = await Promise.any([fromGoldApi(), fromMetalsLive()]).catch(() => null);
+  if (!quote) return Response.json({ error: "Unable to fetch gold price" }, { status: 502 });
   return Response.json(quote, {
     status: 200,
-    headers: { "cache-control": "public, max-age=20" },
+    headers: { "cache-control": "no-store, must-revalidate" },
   });
 }
 
