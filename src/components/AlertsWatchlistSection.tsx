@@ -60,14 +60,10 @@ export function AlertsWatchlistSection() {
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
-      try {
-        const r = await fetch("/api/gold-price", { cache: "no-store" });
-        if (!r.ok) return;
-        const j = (await r.json()) as { price: number };
-        if (cancelled || typeof j.price !== "number") return;
-        setLivePrice(j.price);
-        checkAlerts(j.price);
-      } catch {}
+      const q = await fetchGoldPrice();
+      if (cancelled || !q) return;
+      setLivePrice(q.price);
+      checkAlerts(q.price);
     };
     tick();
     const id = setInterval(tick, 30_000);
