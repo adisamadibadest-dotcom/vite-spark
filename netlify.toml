@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/gold-price"
+  to = "/.netlify/functions/gold-price"
+  status = 200
+
+[[redirects]]
+  from = "/api/chat"
+  to = "/.netlify/functions/chat"
+  status = 200
+
+[[redirects]]
+  from = "/api/analyze-chart"
+  to = "/.netlify/functions/analyze-chart"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
