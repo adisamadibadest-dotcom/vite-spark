@@ -1,0 +1,57 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+
+type Subscription = {
+  id: string;
+  plan: string;
+  status: string;
+  starts_at: string;
+  expires_at: string;
+};
+
+export function useAccess() {
+  const { user, loading: authLoading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshIdx, setRefreshIdx] = useState(0);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { setIsAdmin(false); setSubscription(null); setLoading(false); return; }
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [{ data: roles }, { data: subs }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", user.id),
+        supabase
+          .from("subscriptions")
+          .select("id, plan, status, starts_at, expires_at")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
+          .order("expires_at", { ascending: false })
+          .limit(1),
+      ]);
+      if (cancelled) return;
+      setIsAdmin((roles ?? []).some((r) => r.role === "admin"));
+      setSubscription((subs?.[0] as Subscription | undefined) ?? null);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [user, authLoading, refreshIdx]);
+
+  const hasActiveSubscription = !!subscription;
+  const unlimited = isAdmin || hasActiveSubscription;
+
+  return {
+    isAdmin,
+    subscription,
+    hasActiveSubscription,
+    unlimited,
+    loading,
+    refresh: () => setRefreshIdx((i) => i + 1),
+  };
+}
