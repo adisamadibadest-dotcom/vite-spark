@@ -173,16 +173,12 @@ function GoldMarketCard() {
   useEffect(() => {
     let cancelled = false;
     const fetchPrice = async () => {
-      try {
-        const r = await fetch("/api/gold-price", { cache: "no-store" });
-        if (!r.ok) return;
-        const j = (await r.json()) as { price: number };
-        if (cancelled || typeof j.price !== "number") return;
-        setPrice((p) => { setPrev(p ?? j.price); return j.price; });
-        setOpen24h((o) => o ?? +(j.price * 0.995).toFixed(2));
-        setUpdatedAt(Date.now());
-        setTick((t) => t + 1);
-      } catch {}
+      const q = await fetchGoldPrice();
+      if (cancelled || !q) return;
+      setPrice((p) => { setPrev(p ?? q.price); return q.price; });
+      setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
+      setUpdatedAt(Date.now());
+      setTick((t) => t + 1);
     };
     fetchPrice();
     const poll = setInterval(fetchPrice, 30_000);
