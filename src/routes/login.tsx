@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState, type FormEvent } from "react";
-import { Sparkles, Loader2, Mail, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Sparkles, Loader2, Mail, Lock, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
