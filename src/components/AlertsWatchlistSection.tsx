@@ -3,6 +3,7 @@ import { Bell, Eye, Plus, Trash2, BellRing, Loader2, CheckCircle2 } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { fetchGoldPrice } from "@/lib/gold-price";
 
 type Alert = {
   id: string;
