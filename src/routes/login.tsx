@@ -19,6 +19,7 @@ export function AuthPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!authLoading && session) {
