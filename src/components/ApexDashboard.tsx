@@ -37,7 +37,7 @@ type Annotation = {
   confidence: number;
   summary: string;
   reasoning: { structure: string; liquidity: string; momentum: string; levels: string };
-  zones: { type: "support" | "resistance" | "fvg"; x: number; y: number; width: number; height: number; label: string }[];
+  zones: { type: "support" | "resistance" | "fvg" | "ob" | "demand" | "supply"; x: number; y: number; width: number; height: number; label: string }[];
   markers: { type: "bos" | "choch" | "liquidity"; x1: number; y1: number; x2: number; y2: number; label: string }[];
   setup?: TradeSetup;
 };
@@ -47,7 +47,7 @@ const WHATSAPP_MSG = encodeURIComponent(
   "Hello ApexGold AI Team, I would like to subscribe to the premium membership plan. Please guide me through the payment and activation process."
 );
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
-const ADMIN_EMAIL = "apexgoldaiteam@gamil.com";
+const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 const FREE_TRIAL_LIMIT = 3;
 
 async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string }> {
@@ -170,31 +170,32 @@ function GoldMarketCard() {
   const [updatedAt, setUpdatedAt] = useState(Date.now());
   const [tick, setTick] = useState(0);
 
-  // Fetch real spot gold every 30s; tiny visual drift between fetches keeps UI alive.
+  // Poll real spot gold every 5s for near-MT5 latency. Pause when tab hidden to save quota.
   useEffect(() => {
     let cancelled = false;
-    const fetchPrice = async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tickFetch = async () => {
+      if (cancelled) return;
       const q = await fetchGoldPrice();
-      if (cancelled || !q) return;
-      setPrice((p) => { setPrev(p ?? q.price); return q.price; });
-      setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
-      setUpdatedAt(Date.now());
-      setTick((t) => t + 1);
-    };
-    fetchPrice();
-    const poll = setInterval(fetchPrice, 30_000);
-    // Subtle inter-poll drift so the ticker feels live
-    const drift = setInterval(() => {
-      setPrice((p) => {
-        if (p == null) return p;
-        const next = +(p + (Math.random() - 0.5) * 0.35).toFixed(2);
-        setPrev(p);
-        setUpdatedAt(Date.now());
+      if (cancelled) return;
+      if (q) {
+        setPrice((p) => {
+          if (p != null && p !== q.price) setPrev(p);
+          else if (p == null) setPrev(q.price);
+          return q.price;
+        });
+        setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
+        setUpdatedAt(q.fetchedAt);
         setTick((t) => t + 1);
-        return next;
-      });
-    }, 2500);
-    return () => { cancelled = true; clearInterval(poll); clearInterval(drift); };
+      }
+      const delay = document.hidden ? 30_000 : 5_000;
+      timer = setTimeout(tickFetch, delay);
+    };
+    tickFetch();
+    const onVis = () => { if (!document.hidden && timer) { clearTimeout(timer); tickFetch(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   const displayPrice = price ?? 0;
@@ -1043,6 +1044,24 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
 }
 
 function AnnotationOverlay({ ann }: { ann: Annotation }) {
+  const zoneStyle = (t: Annotation["zones"][number]["type"]) => {
+    switch (t) {
+      case "support":
+      case "demand":
+        return { color: "oklch(0.72 0.18 150)", fill: "url(#supFill)" };
+      case "resistance":
+      case "supply":
+        return { color: "oklch(0.65 0.22 25)", fill: "url(#resFill)" };
+      case "fvg":
+        return { color: "oklch(0.82 0.16 85)", fill: "url(#fvgFill)" };
+      case "ob":
+        return { color: "oklch(0.78 0.17 65)", fill: "url(#obFill)" };
+    }
+  };
+  const zoneLabel = (z: Annotation["zones"][number]) => {
+    if (z.label) return z.label;
+    return ({ support: "Support", resistance: "Resistance", fvg: "FVG", ob: "OB", demand: "Demand", supply: "Supply" } as const)[z.type];
+  };
   return (
     <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
       <defs>
@@ -1058,15 +1077,14 @@ function AnnotationOverlay({ ann }: { ann: Annotation }) {
           <stop offset="0%" stopColor="oklch(0.82 0.16 85)" stopOpacity="0.3" />
           <stop offset="100%" stopColor="oklch(0.82 0.16 85)" stopOpacity="0.05" />
         </linearGradient>
+        <linearGradient id="obFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="oklch(0.78 0.17 65)" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="oklch(0.78 0.17 65)" stopOpacity="0.08" />
+        </linearGradient>
       </defs>
 
       {ann.zones.map((z, i) => {
-        const color = z.type === "support" ? "oklch(0.72 0.18 150)" :
-                      z.type === "resistance" ? "oklch(0.65 0.22 25)" :
-                                                "oklch(0.82 0.16 85)";
-        const fill = z.type === "support" ? "url(#supFill)" :
-                     z.type === "resistance" ? "url(#resFill)" :
-                                               "url(#fvgFill)";
+        const { color, fill } = zoneStyle(z.type);
         return (
           <g key={`z-${i}`}>
             <rect
@@ -1074,7 +1092,7 @@ function AnnotationOverlay({ ann }: { ann: Annotation }) {
               width={z.width * 100} height={z.height * 100}
               fill={fill} stroke={color} strokeWidth="0.25" strokeDasharray="0.6 0.4"
               vectorEffect="non-scaling-stroke"
-              style={{ animation: `fade-up 0.6s ease-out both`, animationDelay: `${i * 120}ms` }}
+              style={{ animation: `fade-up 0.6s ease-out both`, animationDelay: `${i * 100}ms` }}
             />
             <text
               x={z.x * 100 + 0.6}
@@ -1084,7 +1102,7 @@ function AnnotationOverlay({ ann }: { ann: Annotation }) {
               fontWeight="700"
               style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9))" }}
             >
-              {z.label}
+              {zoneLabel(z)}
             </text>
           </g>
         );
@@ -1112,7 +1130,7 @@ function AnnotationOverlay({ ann }: { ann: Annotation }) {
               textAnchor="middle"
               style={{ filter: "drop-shadow(0 0 1px rgba(0,0,0,0.9))" }}
             >
-              {m.type.toUpperCase()}
+              {m.label || m.type.toUpperCase()}
             </text>
           </g>
         );

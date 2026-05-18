@@ -11,7 +11,7 @@ async function fromGoldApi(): Promise<GoldQuote | null> {
     });
     if (!r.ok) return null;
     const j = (await r.json()) as { price?: number };
-    if (typeof j.price === "number" && j.price > 100) {
+    if (typeof j.price === "number" && j.price > 500 && j.price < 10000) {
       return { price: +j.price.toFixed(2), source: "gold-api", fetchedAt: Date.now() };
     }
   } catch {}
@@ -26,7 +26,7 @@ async function fromMetalsLive(): Promise<GoldQuote | null> {
     if (!r.ok) return null;
     const j = (await r.json()) as { items?: { xauPrice?: number }[] };
     const p = j.items?.[0]?.xauPrice;
-    if (typeof p === "number" && p > 100) {
+    if (typeof p === "number" && p > 500 && p < 10000) {
       return { price: +p.toFixed(2), source: "goldprice.org", fetchedAt: Date.now() };
     }
   } catch {}
@@ -34,13 +34,12 @@ async function fromMetalsLive(): Promise<GoldQuote | null> {
 }
 
 export async function handleGoldPrice(): Promise<Response> {
-  const quote = (await fromGoldApi()) ?? (await fromMetalsLive());
-  if (!quote) {
-    return Response.json({ error: "Unable to fetch gold price" }, { status: 502 });
-  }
+  // Race both upstreams in parallel — first sane quote wins (closest to MT5 tick).
+  const quote = await Promise.any([fromGoldApi(), fromMetalsLive()]).catch(() => null);
+  if (!quote) return Response.json({ error: "Unable to fetch gold price" }, { status: 502 });
   return Response.json(quote, {
     status: 200,
-    headers: { "cache-control": "public, max-age=20" },
+    headers: { "cache-control": "no-store, must-revalidate" },
   });
 }
 
@@ -101,33 +100,33 @@ const ConfidenceSchema = z.preprocess((value) => {
 }, z.number().min(0).max(100));
 
 const AnnotationSchema = z.object({
-  bias: z.enum(["bullish", "bearish", "neutral"]),
-  confidence: ConfidenceSchema,
-  summary: z.string(),
+  bias: z.enum(["bullish", "bearish", "neutral"]).default("neutral"),
+  confidence: ConfidenceSchema.default(0),
+  summary: z.string().default(""),
   reasoning: z.object({
-    structure: z.string(),
-    liquidity: z.string(),
-    momentum: z.string(),
-    levels: z.string(),
-  }),
+    structure: z.string().default(""),
+    liquidity: z.string().default(""),
+    momentum: z.string().default(""),
+    levels: z.string().default(""),
+  }).default({ structure: "", liquidity: "", momentum: "", levels: "" }),
   zones: z.array(z.object({
-    type: z.enum(["support", "resistance", "fvg"]),
+    type: z.enum(["support", "resistance", "fvg", "ob", "demand", "supply"]),
     x: NormalizedNumberSchema,
     y: NormalizedNumberSchema,
     width: NormalizedNumberSchema,
     height: NormalizedNumberSchema,
-    label: z.string(),
-  })).max(6),
+    label: z.string().default(""),
+  })).max(8).default([]),
   markers: z.array(z.object({
-    type: z.enum(["bos", "choch", "liquidity"]),
+    type: z.enum(["bos", "choch", "liquidity", "sweep"]).transform((v) => (v === "sweep" ? "liquidity" : v) as "bos" | "choch" | "liquidity"),
     x1: NormalizedNumberSchema,
     y1: NormalizedNumberSchema,
     x2: NormalizedNumberSchema,
     y2: NormalizedNumberSchema,
-    label: z.string(),
-  })).max(5),
+    label: z.string().default(""),
+  })).max(6).default([]),
   setup: z.object({
-    valid: z.boolean(),
+    valid: z.boolean().default(false),
     direction: z.enum(["long", "short", "none"]).default("none"),
     tradeType: z.enum(["scalp", "intraday", "swing", "none"]).default("none"),
     confidence: ConfidenceSchema.default(0),
@@ -195,8 +194,8 @@ function completeTradeSetup(annotation: ChartAnnotations): ChartAnnotations {
   }
 
   const hasStructure = annotation.markers.some((marker) => marker.type === "bos" || marker.type === "choch");
-  const hasActionableZone = annotation.zones.some((zone) => zone.type === "support" || zone.type === "resistance" || zone.type === "fvg");
-  if (annotation.bias === "neutral" || annotation.confidence < 55 || !hasStructure || !hasActionableZone) {
+  const hasActionableZone = annotation.zones.length > 0;
+  if (annotation.bias === "neutral" || annotation.confidence < 50 || (!hasStructure && !hasActionableZone)) {
     return {
       ...annotation,
       setup: {
@@ -247,60 +246,80 @@ function completeTradeSetup(annotation: ChartAnnotations): ChartAnnotations {
   };
 }
 
-const ANALYZE_SYSTEM = `You are an institutional chart analyst. The user uploads a trading chart screenshot (forex, crypto, or gold).
+const ANALYZE_SYSTEM = `You are a senior institutional Smart Money Concepts (SMC / ICT) chart analyst. The user uploads a trading chart screenshot (forex, crypto, gold).
 
 Your job:
-- Read the visible price action carefully.
-- Identify clean Smart Money Concepts: market structure, BOS, CHOCH, fair value gaps (FVG), key support/resistance zones, and obvious liquidity pools if visible.
-- Output coordinates of annotations in NORMALIZED 0..1 space relative to the uploaded image (x grows right, y grows DOWN from the top edge).
-- Keep it CLEAN: max 4 zones, max 4 markers. Do NOT label every swing high/low. No HH/HL/LH/LL clutter.
-- Give realistic, tight zones (height ~0.03-0.08 of chart for S/R, ~0.02-0.05 for FVG).
-- Markers are short line segments showing where a BOS or CHOCH happened — keep them short and on the right side of the chart.
-- Your "summary" and "reasoning" MUST describe exactly what you drew. If you mark bullish BOS + support holding, the prose says bullish.
-- Build a TRADE SETUP only when there is a clean institutional confluence (structure shift + liquidity sweep or clean S/R + FVG). Otherwise mark setup.valid = false and explain why in noSetupReason.
-- The setup object is MANDATORY in every response. When setup.valid=true, entry, stopLoss, takeProfits with exactly TP1/TP2/TP3, riskReward, tradeType, confidence, and rationale are all REQUIRED.
-- Use realistic prices read from the chart axis. Stop loss must sit beyond invalidation structure. TP1/TP2/TP3 must respect prior structure / liquidity / extensions.
-- Risk-to-reward expressed against TP2, formatted like "1:2.4".
-- Trade type: scalp (intraday minutes-hours, M1-M15), intraday (H1-H4, same day), swing (H4-D1+, multi-day).
+- Read the visible price action carefully and identify: overall trend / market structure, BOS (break of structure), CHOCH (change of character), liquidity sweeps (buy-side / sell-side liquidity grabs), order blocks (OB), fair value gaps (FVG / imbalances), supply and demand zones, and key support/resistance.
+- Mark them ON the chart using NORMALIZED 0..1 coordinates relative to the image (x grows right, y grows DOWN from the top edge).
+- Be CLEAN and SELECTIVE: max 6 zones, max 5 markers. No HH/HL/LH/LL clutter. Tight zones (height 0.02-0.08).
+- Zone types:
+    * "ob"          — order block (bullish or bearish OB) — label like "Bull OB" / "Bear OB"
+    * "demand"      — institutional demand zone
+    * "supply"      — institutional supply zone
+    * "fvg"         — fair value gap / imbalance
+    * "support"     — major horizontal support
+    * "resistance"  — major horizontal resistance
+- Marker types:
+    * "bos"        — break of structure (short line segment at the break)
+    * "choch"      — change of character
+    * "liquidity"  — liquidity sweep (label "BSL swept" / "SSL swept")
+- summary + reasoning MUST match what you drew. If bullish BOS + demand holding, bias = bullish.
+- TRADE SETUP is MANDATORY. Build a high-probability institutional setup whenever the structure + one zone of confluence is clearly visible. Only set valid=false if the chart is mid-range with no actionable structure — then fill noSetupReason.
+- When valid=true: entry (or entryZone), stopLoss beyond invalidation, exactly TP1/TP2/TP3 respecting structure / liquidity / extensions, riskReward vs TP2 (e.g. "1:2.4"), tradeType (scalp = M1-M15, intraday = H1-H4, swing = H4-D1+), confidence 0-100, and a 1-2 sentence institutional rationale.
+- Prices must be read off the visible chart axis and look realistic.
 - Tone: institutional desk note. No hype. End summary with: "Not financial advice."`;
 
 function extractJsonObject(text: string): unknown {
   const cleaned = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1 || end <= start) throw new Error("AI returned unreadable chart analysis.");
-    return JSON.parse(cleaned.slice(start, end + 1));
-  }
+  try { return JSON.parse(cleaned); } catch {}
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) throw new Error("AI returned unreadable chart analysis.");
+  return JSON.parse(cleaned.slice(start, end + 1));
 }
 
 function jsonInstruction() {
-  return `Analyze this chart and return ONLY one valid JSON object, no markdown and no arrays.
+  return `Analyze this chart and return ONLY one valid JSON object — no markdown, no prose, no arrays at the root.
 Schema:
 {
   "bias": "bullish" | "bearish" | "neutral",
-  "confidence": number from 0 to 100,
-  "summary": "2-3 sentence institutional commentary ending with: Not financial advice.",
+  "confidence": 0-100,
+  "summary": "2-3 sentence institutional desk note ending with: Not financial advice.",
   "reasoning": { "structure": "string", "liquidity": "string", "momentum": "string", "levels": "string" },
-  "zones": [{ "type": "support" | "resistance" | "fvg", "x": 0.1, "y": 0.1, "width": 0.2, "height": 0.05, "label": "string" }],
-  "markers": [{ "type": "bos" | "choch" | "liquidity", "x1": 0.1, "y1": 0.1, "x2": 0.2, "y2": 0.2, "label": "string" }],
+  "zones": [{ "type": "support"|"resistance"|"fvg"|"ob"|"demand"|"supply", "x": 0.1, "y": 0.1, "width": 0.2, "height": 0.05, "label": "string" }],
+  "markers": [{ "type": "bos"|"choch"|"liquidity", "x1": 0.1, "y1": 0.1, "x2": 0.2, "y2": 0.2, "label": "string" }],
   "setup": {
     "valid": true,
-    "direction": "long" | "short" | "none",
-    "tradeType": "scalp" | "intraday" | "swing" | "none",
-    "confidence": number from 0 to 100,
+    "direction": "long"|"short"|"none",
+    "tradeType": "scalp"|"intraday"|"swing"|"none",
+    "confidence": 0-100,
     "entry": "2418.50",
     "entryZone": { "low": "2417.20", "high": "2419.40" },
     "stopLoss": "2412.80",
     "takeProfits": ["2425.00", "2432.50", "2441.00"],
     "riskReward": "1:2.4",
-    "rationale": "1-2 sentence institutional reasoning for the entry.",
-    "noSetupReason": "Optional. Required when valid=false. Example: Price mid-range with no liquidity sweep."
+    "rationale": "1-2 sentence institutional reasoning.",
+    "noSetupReason": "Only when valid=false."
   }
 }
-Coordinates must be normalized decimals between 0 and 1 relative to the uploaded image. Keep max 4 zones and max 4 markers. If no high-probability setup, set setup.valid=false, direction="none", tradeType="none", confidence<=35, leave entry/SL/TP empty arrays/strings, and fill noSetupReason.`;
+Coordinates are normalized decimals between 0 and 1 relative to the uploaded image. Max 6 zones, max 5 markers.`;
+}
+
+async function generateChartAnalysis(imageBase64: string, mimeType: string) {
+  return generateText({
+    model: getAiModel(),
+    temperature: 0.2,
+    system: ANALYZE_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: jsonInstruction() },
+          { type: "image", image: `data:${mimeType};base64,${imageBase64}` },
+        ],
+      },
+    ],
+  });
 }
 
 export async function handleAnalyzeChart(request: Request): Promise<Response> {
@@ -310,24 +329,21 @@ export async function handleAnalyzeChart(request: Request): Promise<Response> {
       mimeType?: string;
     };
     if (!imageBase64) return new Response("imageBase64 required", { status: 400 });
+    const mt = mimeType ?? "image/png";
 
-    const { text } = await generateText({
-      model: getAiModel(),
-      temperature: 0.2,
-      system: ANALYZE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: jsonInstruction() },
-            { type: "image", image: `data:${mimeType ?? "image/png"};base64,${imageBase64}` },
-          ],
-        },
-      ],
-    });
-
-    const object = completeTradeSetup(AnnotationSchema.parse(extractJsonObject(text)));
-    return Response.json(object);
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { text } = await generateChartAnalysis(imageBase64, mt);
+        const parsed = AnnotationSchema.parse(extractJsonObject(text));
+        return Response.json(completeTradeSetup(parsed));
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/429|402/.test(msg)) break; // don't retry rate-limit / payment
+      }
+    }
+    throw lastErr ?? new Error("AI error");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
     const status = /429/.test(msg) ? 429 : /402/.test(msg) ? 402 : 500;
