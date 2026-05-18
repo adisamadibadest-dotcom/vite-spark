@@ -47,7 +47,7 @@ const WHATSAPP_MSG = encodeURIComponent(
   "Hello ApexGold AI Team, I would like to subscribe to the premium membership plan. Please guide me through the payment and activation process."
 );
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
-const ADMIN_EMAIL = "apexgoldaiteam@gamil.com";
+const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 const FREE_TRIAL_LIMIT = 3;
 
 async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string }> {
@@ -170,31 +170,32 @@ function GoldMarketCard() {
   const [updatedAt, setUpdatedAt] = useState(Date.now());
   const [tick, setTick] = useState(0);
 
-  // Fetch real spot gold every 30s; tiny visual drift between fetches keeps UI alive.
+  // Poll real spot gold every 5s for near-MT5 latency. Pause when tab hidden to save quota.
   useEffect(() => {
     let cancelled = false;
-    const fetchPrice = async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tickFetch = async () => {
+      if (cancelled) return;
       const q = await fetchGoldPrice();
-      if (cancelled || !q) return;
-      setPrice((p) => { setPrev(p ?? q.price); return q.price; });
-      setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
-      setUpdatedAt(Date.now());
-      setTick((t) => t + 1);
-    };
-    fetchPrice();
-    const poll = setInterval(fetchPrice, 30_000);
-    // Subtle inter-poll drift so the ticker feels live
-    const drift = setInterval(() => {
-      setPrice((p) => {
-        if (p == null) return p;
-        const next = +(p + (Math.random() - 0.5) * 0.35).toFixed(2);
-        setPrev(p);
-        setUpdatedAt(Date.now());
+      if (cancelled) return;
+      if (q) {
+        setPrice((p) => {
+          if (p != null && p !== q.price) setPrev(p);
+          else if (p == null) setPrev(q.price);
+          return q.price;
+        });
+        setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
+        setUpdatedAt(q.fetchedAt);
         setTick((t) => t + 1);
-        return next;
-      });
-    }, 2500);
-    return () => { cancelled = true; clearInterval(poll); clearInterval(drift); };
+      }
+      const delay = document.hidden ? 30_000 : 5_000;
+      timer = setTimeout(tickFetch, delay);
+    };
+    tickFetch();
+    const onVis = () => { if (!document.hidden && timer) { clearTimeout(timer); tickFetch(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   const displayPrice = price ?? 0;
