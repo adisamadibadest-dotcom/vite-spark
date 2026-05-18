@@ -10,6 +10,7 @@ import { useAccess } from "@/hooks/use-access";
 import { supabase } from "@/integrations/supabase/client";
 import { MyTradesSection } from "@/components/MyTradesSection";
 import { AlertsWatchlistSection } from "@/components/AlertsWatchlistSection";
+import { fetchGoldPrice } from "@/lib/gold-price";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
