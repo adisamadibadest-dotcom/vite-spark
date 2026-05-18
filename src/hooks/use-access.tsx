@@ -10,6 +10,8 @@ type Subscription = {
   expires_at: string;
 };
 
+const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
+
 export function useAccess() {
   const { user, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -24,8 +26,9 @@ export function useAccess() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: roles }, { data: subs }] = await Promise.all([
+      const [{ data: roles }, { data: repairedAdminRole }, { data: subs }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id),
+        supabase.rpc("ensure_admin_role"),
         supabase
           .from("subscriptions")
           .select("id, plan, status, starts_at, expires_at")
@@ -36,7 +39,8 @@ export function useAccess() {
           .limit(1),
       ]);
       if (cancelled) return;
-      setIsAdmin((roles ?? []).some((r) => r.role === "admin"));
+      const emailAdmin = user.email?.toLowerCase() === ADMIN_EMAIL;
+      setIsAdmin(emailAdmin || repairedAdminRole === true || (roles ?? []).some((r) => r.role === "admin"));
       setSubscription((subs?.[0] as Subscription | undefined) ?? null);
       setLoading(false);
     })();
