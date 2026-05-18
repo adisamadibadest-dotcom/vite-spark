@@ -45,10 +45,19 @@ async function fromGoldPriceOrg(): Promise<GoldQuote | null> {
   return null;
 }
 
+async function requireQuote(source: Promise<GoldQuote | null>): Promise<GoldQuote> {
+  const quote = await source;
+  if (!quote) throw new Error("No quote from upstream");
+  return quote;
+}
+
 // Race two upstream sources in parallel — first sane response wins.
 // This brings the live tick closer to MT5 broker mid-price.
 export async function fetchGoldPrice(): Promise<GoldQuote | null> {
   const own = fromOwnApi();
-  const race = Promise.any([fromGoldApi(), fromGoldPriceOrg()]).catch(() => null);
+  const race = Promise.any([
+    requireQuote(fromGoldApi()),
+    requireQuote(fromGoldPriceOrg()),
+  ]).catch(() => null);
   return (await own) ?? (await race) ?? null;
 }

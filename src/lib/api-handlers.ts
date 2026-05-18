@@ -33,9 +33,18 @@ async function fromMetalsLive(): Promise<GoldQuote | null> {
   return null;
 }
 
+async function requireQuote(source: Promise<GoldQuote | null>): Promise<GoldQuote> {
+  const quote = await source;
+  if (!quote) throw new Error("No quote from upstream");
+  return quote;
+}
+
 export async function handleGoldPrice(): Promise<Response> {
-  // Race both upstreams in parallel — first sane quote wins (closest to MT5 tick).
-  const quote = await Promise.any([fromGoldApi(), fromMetalsLive()]).catch(() => null);
+  // Race both upstreams in parallel — first sane quote wins. Null/failed feeds are ignored.
+  const quote = await Promise.any([
+    requireQuote(fromGoldApi()),
+    requireQuote(fromMetalsLive()),
+  ]).catch(() => null);
   if (!quote) return Response.json({ error: "Unable to fetch gold price" }, { status: 502 });
   return Response.json(quote, {
     status: 200,
