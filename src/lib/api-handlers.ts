@@ -84,7 +84,7 @@ export async function handleChat(request: Request): Promise<Response> {
     if (!message?.trim()) return new Response("message required", { status: 400 });
 
     const { text } = await generateText({
-      model: getAiModel(),
+      model: google("gemini-2.0-flash"),
       system: CHAT_SYSTEM_PROMPT,
       messages: [
         ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
@@ -319,7 +319,7 @@ Coordinates are normalized decimals between 0 and 1 relative to the uploaded ima
 
 async function generateChartAnalysis(imageBase64: string, mimeType: string) {
   return generateText({
-    model: getAiModel(),
+    model: google("gemini-2.0-flash"),
     temperature: 0.2,
     system: ANALYZE_SYSTEM,
     messages: [
