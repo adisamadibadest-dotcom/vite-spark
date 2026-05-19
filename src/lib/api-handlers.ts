@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway";
+import { createLovableAiGatewayProvider } from "./ai-gateway.ts";
 
 type GoldQuote = { price: number; source: string; fetchedAt: number };
 
@@ -338,6 +338,9 @@ export async function handleAnalyzeChart(request: Request): Promise<Response> {
       mimeType?: string;
     };
     if (!imageBase64) return new Response("imageBase64 required", { status: 400 });
+    if (imageBase64.length > 3_800_000) {
+      return Response.json({ error: "Image is too large. Please upload a smaller screenshot." }, { status: 413 });
+    }
     const mt = mimeType ?? "image/png";
 
     let lastErr: unknown = null;
