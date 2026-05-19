@@ -1,5 +1,5 @@
-import { handleGoldPrice } from "../src/lib/api-handlers";
-import { sendWebResponse } from "./_utils";
+import { handleGoldPrice } from "../src/lib/api-handlers.ts";
+import { sendWebResponse } from "./_utils.ts";
 
 export default async function handler(_request: unknown, response?: unknown) {
   const webResponse = await handleGoldPrice();
