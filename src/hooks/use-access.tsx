@@ -28,7 +28,7 @@ export function useAccess() {
       setLoading(true);
       const [{ data: roles }, { data: repairedAdminRole }, { data: subs }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user.id),
-        supabase.rpc("ensure_admin_role"),
+        (supabase.rpc as unknown as (fn: string) => Promise<{ data: boolean | null }>)("ensure_admin_role"),
         supabase
           .from("subscriptions")
           .select("id, plan, status, starts_at, expires_at")
