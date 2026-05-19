@@ -72,10 +72,7 @@ function getAiModel() {
     throw new Error("Missing GEMINI_API_KEY");
   }
 
-  return google({
-  model: "gemini-2.0-flash",
-  apiKey: key,
-});
+  return google("gemini-2.0-flash");
 }
 
 export async function handleChat(request: Request): Promise<Response> {
