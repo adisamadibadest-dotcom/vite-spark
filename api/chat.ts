@@ -1,5 +1,5 @@
-import { handleChat } from "../src/lib/api-handlers";
-import { sendWebResponse, toWebRequest } from "./_utils";
+import { handleChat } from "../src/lib/api-handlers.ts";
+import { sendWebResponse, toWebRequest } from "./_utils.ts";
 
 export default async function handler(request: Request, response?: unknown) {
   const webRequest = request instanceof Request ? request : await toWebRequest(request as never);
