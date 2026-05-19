@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "./ai-gateway.ts";
+import { google } from "@ai-sdk/google";
 
 type GoldQuote = { price: number; source: string; fetchedAt: number };
 
@@ -66,10 +66,15 @@ Respond like a senior FX/commodities desk strategist. Every reply MUST be concis
 Tone: professional, calm, data-driven. No hype, no emojis. Use precise prices like 2,418.65. If the user uploads or references a chart, ground your commentary in classic SMC/ICT concepts (BOS, CHOCH, FVG, liquidity sweeps, OB).`;
 
 function getAiModel() {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("Missing LOVABLE_API_KEY");
-  const gateway = createLovableAiGatewayProvider(key);
-  return gateway("google/gemini-3-flash-preview");
+  const key = process.env.GEMINI_API_KEY;
+
+  if (!key) {
+    throw new Error("Missing GEMINI_API_KEY");
+  }
+
+  return google("gemini-2.0-flash", {
+    apiKey: key,
+  });
 }
 
 export async function handleChat(request: Request): Promise<Response> {
