@@ -57,17 +57,23 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
     image.src = sourceUrl;
     await image.decode();
 
-    const maxSide = 1400;
+    const maxSide = 1200;
     const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Image processing is not available.");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const mime = file.type === "image/png" ? "image/png" : "image/jpeg";
-    const url = canvas.toDataURL(mime, 0.82);
-    return { url, base64: url.split(",")[1] ?? "", mime };
+    const mime = "image/jpeg";
+    for (const quality of [0.78, 0.68, 0.58]) {
+      const url = canvas.toDataURL(mime, quality);
+      const base64 = url.split(",")[1] ?? "";
+      if (base64.length <= 3_600_000) return { url, base64, mime };
+    }
+    throw new Error("Image is too large. Please crop the chart area and try again.");
   } finally {
     URL.revokeObjectURL(sourceUrl);
   }
