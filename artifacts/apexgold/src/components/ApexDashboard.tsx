@@ -885,11 +885,14 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
     if (!file || loading) return;
     if (limitReached) return;
     setLoading(true); setError(null); setResult(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
     try {
       const res = await fetch("/api/analyze-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: file.base64, mimeType: file.mime }),
+        signal: controller.signal,
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null) as { error?: string } | null;
@@ -905,8 +908,13 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
         localStorage.setItem("apex_trial_uses", String(next));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Analysis failed");
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Analysis is taking longer than expected — please try again.");
+      } else {
+        setError(e instanceof Error ? e.message : "Analysis failed");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
