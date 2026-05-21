@@ -862,11 +862,19 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const [file, setFile] = useState<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean } | null>(null);
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<Annotation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -1026,7 +1034,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
             {loading && (
               <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-gold" />
-                <p className="text-xs text-foreground">Reading market structure…</p>
+                <p className="text-xs text-foreground">Analyzing… {elapsed}s</p>
                 <p className="text-[10px] text-muted-foreground">Identifying BOS, CHOCH, FVG, S/R</p>
               </div>
             )}
