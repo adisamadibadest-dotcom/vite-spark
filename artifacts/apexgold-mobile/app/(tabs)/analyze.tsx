@@ -11,7 +11,7 @@ import {
   Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -223,7 +223,8 @@ export default function AnalyzeScreen() {
   );
 }
 
-function SetupCell({ label, value, colors, red, green }: { label: string; value: string; colors: Record<string, string>; red?: boolean; green?: boolean }) {
+type ColorsArg = ReturnType<typeof useColors>;
+function SetupCell({ label, value, colors, red, green }: { label: string; value: string; colors: ColorsArg; red?: boolean; green?: boolean }) {
   const color = red ? colors.bearish : green ? colors.bullish : colors.foreground;
   return (
     <View style={{ flex: 1, minWidth: "30%" as unknown as number }}>

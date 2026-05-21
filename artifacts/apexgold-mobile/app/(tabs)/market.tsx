@@ -165,7 +165,7 @@ export default function MarketScreen() {
       {/* AI Bias Card */}
       <View style={s.card}>
         <View style={s.sectionHeader}>
-          <Ionicons name="brain" size={16} color={colors.gold} />
+          <Ionicons name="analytics-outline" size={16} color={colors.gold} />
           <Text style={s.sectionTitle}>AI Market Bias</Text>
           <Text style={s.sectionSub}>XAU/USD · Multi-Timeframe</Text>
           <View style={{ marginLeft: "auto" as unknown as number, alignItems: "flex-end" }}>
@@ -179,7 +179,7 @@ export default function MarketScreen() {
         <View style={s.biasRow}>
           {([
             { type: "bullish" as Bias, icon: "trending-up", label: "Bullish", color: colors.bullish },
-            { type: "neutral" as Bias, icon: "remove", label: "Neutral", color: colors.gold },
+            { type: "neutral" as Bias, icon: "minus", label: "Neutral", color: colors.gold },
             { type: "bearish" as Bias, icon: "trending-down", label: "Bearish", color: colors.bearish },
           ] as { type: Bias; icon: string; label: string; color: string }[]).map(({ type, icon, label, color }) => (
             <Pressable
@@ -187,7 +187,7 @@ export default function MarketScreen() {
               style={[s.biasBtn, bias === type && { borderColor: color, backgroundColor: color + "20" }]}
               onPress={() => { setBias(type); Haptics.selectionAsync(); }}
             >
-              <Feather name={icon as "trending-up" | "remove" | "trending-down"} size={16} color={bias === type ? color : colors.mutedForeground} />
+              <Feather name={icon as "trending-up" | "minus" | "trending-down"} size={16} color={bias === type ? color : colors.mutedForeground} />
               <Text style={[s.biasBtnText, bias === type && { color }]}>{label}</Text>
             </Pressable>
           ))}
