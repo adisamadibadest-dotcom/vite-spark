@@ -57,7 +57,7 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
     image.src = sourceUrl;
     await image.decode();
 
-    const maxSide = 1200;
+    const maxSide = 900;
     const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
@@ -68,10 +68,10 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
     const mime = "image/jpeg";
-    for (const quality of [0.78, 0.68, 0.58]) {
+    for (const quality of [0.70, 0.60, 0.50]) {
       const url = canvas.toDataURL(mime, quality);
       const base64 = url.split(",")[1] ?? "";
-      if (base64.length <= 3_600_000) return { url, base64, mime };
+      if (base64.length <= 1_500_000) return { url, base64, mime };
     }
     throw new Error("Image is too large. Please crop the chart area and try again.");
   } finally {
