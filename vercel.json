@@ -1,5 +1,5 @@
 {
   "installCommand": "pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm run build",
-  "outputDirectory": "artifacts/apexgold/dist"
+  "outputDirectory": "dist/public"
 }
