@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -302,15 +303,18 @@ Coordinates are normalized decimals between 0 and 1 relative to the uploaded ima
 }
 
 router.post("/analyze-chart", async (req: Request, res: Response) => {
+  logger.info({ bodySize: JSON.stringify(req.body).length }, "analyze-chart: request received");
   try {
     const { imageBase64, mimeType } = req.body as {
       imageBase64?: string;
       mimeType?: string;
     };
     if (!imageBase64) {
+      logger.warn("analyze-chart: imageBase64 missing from body");
       res.status(400).json({ error: "imageBase64 required" });
       return;
     }
+    logger.info({ b64Len: imageBase64.length, mimeType }, "analyze-chart: image received, sending to Gemini");
     if (imageBase64.length > 3_800_000) {
       res.status(413).json({ error: "Image is too large. Please upload a smaller screenshot." });
       return;
@@ -320,6 +324,7 @@ router.post("/analyze-chart", async (req: Request, res: Response) => {
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
+        logger.info({ attempt }, "analyze-chart: calling Gemini gemini-2.0-flash");
         const { text } = await generateText({
           model: google("gemini-2.0-flash"),
           temperature: 0.2,
@@ -334,12 +339,15 @@ router.post("/analyze-chart", async (req: Request, res: Response) => {
             },
           ],
         });
+        logger.info({ textLen: text.length }, "analyze-chart: Gemini responded, parsing JSON");
         const parsed = AnnotationSchema.parse(extractJsonObject(text));
+        logger.info({ bias: parsed.bias, confidence: parsed.confidence }, "analyze-chart: success");
         res.json(completeTradeSetup(parsed));
         return;
       } catch (e) {
         lastErr = e;
         const msg = e instanceof Error ? e.message : String(e);
+        logger.error({ attempt, err: msg }, "analyze-chart: attempt failed");
         if (/429|402/.test(msg)) break;
       }
     }
@@ -347,6 +355,7 @@ router.post("/analyze-chart", async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
     const status = /429/.test(msg) ? 429 : /402/.test(msg) ? 402 : 500;
+    logger.error({ status, err: msg }, "analyze-chart: returning error to client");
     res.status(status).json({ error: msg });
   }
 });
