@@ -50,7 +50,7 @@ const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
 const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 const FREE_TRIAL_LIMIT = 3;
 
-async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string }> {
+async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean }> {
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -59,6 +59,7 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
 
     const maxSide = 900;
     const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const wasResized = scale < 1;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -71,7 +72,10 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
     for (const quality of [0.70, 0.60, 0.50]) {
       const url = canvas.toDataURL(mime, quality);
       const base64 = url.split(",")[1] ?? "";
-      if (base64.length <= 1_500_000) return { url, base64, mime };
+      if (base64.length <= 1_500_000) {
+        const compressedKB = Math.round(base64.length * 0.75 / 1024);
+        return { url, base64, mime, compressedKB, wasResized };
+      }
     }
     throw new Error("Image is too large. Please crop the chart area and try again.");
   } finally {
@@ -855,7 +859,7 @@ function ChatCard() {
 function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const { user } = useAuth();
   const { unlimited, isAdmin, subscription, loading: accessLoading } = useAccess();
-  const [file, setFile] = useState<{ url: string; base64: string; mime: string } | null>(null);
+  const [file, setFile] = useState<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean } | null>(null);
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Annotation | null>(null);
@@ -1001,6 +1005,18 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
               className="w-full h-auto block max-h-[420px] object-contain"
             />
             {result && <AnnotationOverlay ann={result} />}
+            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground">
+                <Zap className="w-2.5 h-2.5 text-gold" />
+                Compressed to {file.compressedKB} KB
+              </span>
+              {file.wasResized && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-background/80 backdrop-blur border border-border text-muted-foreground">
+                  <Activity className="w-2.5 h-2.5 text-gold" />
+                  Resized for faster analysis
+                </span>
+              )}
+            </div>
             <button
               onClick={reset}
               className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
