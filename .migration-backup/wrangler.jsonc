@@ -1,6 +1,0 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "apexgold-ai-spa",
-  "compatibility_date": "2025-09-24",
-  "pages_build_output_dir": "dist"
-}

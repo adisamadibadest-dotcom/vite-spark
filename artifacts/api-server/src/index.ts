@@ -1,10 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
-if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY && process.env.GEMINI_API_KEY) {
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
-}
-
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
