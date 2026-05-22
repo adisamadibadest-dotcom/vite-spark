@@ -71,7 +71,7 @@ export async function handleChat(body: { message?: string; history?: { role: "us
     if (!message?.trim()) return { status: 400, body: { error: "message required" } };
 
     const { text } = await generateText({
-      model: google("gemini-2.0-flash"),
+      model: openai("gpt-4o-mini"),
       system: CHAT_SYSTEM_PROMPT,
       messages: [
         ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
@@ -358,9 +358,9 @@ export async function handleAnalyzeChart(body: {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        console.log(`[analyze-chart] calling Gemini gemini-2.0-flash (attempt ${attempt + 1})`);
+        console.log(`[analyze-chart] calling OpenAI gpt-4o (attempt ${attempt + 1})`);
         const { text } = await generateText({
-          model: google("gemini-2.0-flash"),
+          model: openai("gpt-4o"),
           temperature: 0.2,
           system: ANALYZE_SYSTEM,
           messages: [
@@ -373,7 +373,7 @@ export async function handleAnalyzeChart(body: {
             },
           ],
         });
-        console.log(`[analyze-chart] Gemini responded, textLen=${text.length}`);
+        console.log(`[analyze-chart] OpenAI responded, textLen=${text.length}`);
         const parsed = AnnotationSchema.parse(extractJsonObject(text));
         console.log(`[analyze-chart] success bias=${parsed.bias} confidence=${parsed.confidence}`);
         return { status: 200, body: completeTradeSetup(parsed) };

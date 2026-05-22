@@ -15,6 +15,9 @@ export default defineConfig({
     port: process.env.PORT ? parseInt(process.env.PORT) : 5173,
     host: "0.0.0.0",
     allowedHosts: "all",
+    watch: {
+      ignored: ["**/node_modules/**", "**/.local/share/pnpm/**", "**/pnpm/store/**"],
+    },
     proxy: {
       "/api": {
         target: `http://localhost:${process.env.API_PORT ?? 3001}`,
