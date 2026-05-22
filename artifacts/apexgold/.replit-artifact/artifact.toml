@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "ApexGold AI"
+version = "1.0.0"
+id = "artifacts/apexgold"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18731
+
+[services.development]
+run = "pnpm --filter @workspace/apexgold run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/apexgold", "run", "build" ]
+publicDir = "artifacts/apexgold/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18731"
+BASE_PATH = "/"
