@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { z } from "zod";
-import { google } from "@ai-sdk/google";
+import { openai } from "@ai-sdk/openai";
 
 type GoldQuote = { price: number; source: string; fetchedAt: number };
 
