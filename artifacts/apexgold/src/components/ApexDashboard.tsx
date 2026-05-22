@@ -898,7 +898,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
     if (limitReached) return;
     setLoading(true); setError(null); setResult(null);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+    const timeoutId = setTimeout(() => controller.abort(), 55_000);
     try {
       const res = await fetch("/api/analyze-chart", {
         method: "POST",

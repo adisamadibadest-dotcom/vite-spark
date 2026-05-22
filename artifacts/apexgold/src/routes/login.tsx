@@ -46,13 +46,17 @@ export function AuthPage() {
     setSubmitting(true);
     try {
       if (mode === "signup") {
-        const { error: err } = await supabase.auth.signUp({
+        const { data: signUpData, error: err } = await supabase.auth.signUp({
           email: emailResult.data,
           password: passwordResult.data,
           options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (err) throw err;
-        setSuccess("Account created. Redirecting…");
+        if (signUpData.session) {
+          setSuccess("Account created. Redirecting…");
+        } else {
+          setSuccess("Account created! Check your email for a confirmation link to activate your account.");
+        }
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({
           email: emailResult.data,
