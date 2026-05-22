@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "H0STy8RhzaeJIHOpYR1EJ"
+uri = "file://attached_assets/generated_images/app_icon_for_apexgold_7891.png"
+type = "image"
+title = "generated_image"

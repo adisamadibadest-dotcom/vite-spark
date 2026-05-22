@@ -1,1 +1,2 @@
-# Workspace disabled — this is now a single flat Vite app
+packages:
+  - artifacts/apexgold-mobile
