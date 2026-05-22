@@ -98,6 +98,7 @@ export default function AlertsScreen() {
     setAdding(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const { data, error } = await supabase.from("alerts").insert({
+      user_id: user.id,
       symbol: "XAUUSD",
       direction,
       price: p,

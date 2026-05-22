@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 export default defineConfig({
+  envPrefix: ["VITE_", "EXPO_PUBLIC_"],
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
