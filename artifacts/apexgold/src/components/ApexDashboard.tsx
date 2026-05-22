@@ -3,6 +3,7 @@ import {
   Brain, Activity, TrendingUp, TrendingDown, Minus, Upload, Send, Sparkles,
   ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Clock, Target,
   ShieldCheck, Zap, Loader2, Check, AlertTriangle, Layers, Droplet, GitBranch, BarChart3, Mail, LogOut, User as UserIcon, Save,
+  RefreshCw, WifiOff, Server,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +18,14 @@ import {
 
 type Bias = "bullish" | "bearish" | "neutral";
 type ChatMsg = { role: "user" | "assistant"; content: string };
+
+type ErrorCategory = "timeout" | "rate-limit" | "credits" | "server" | "network";
+type ErrorMeta = {
+  category: ErrorCategory;
+  statusCode: number | null;
+  message: string;
+  retryDelay: number | null;
+};
 
 type TradeSetup = {
   valid: boolean;
@@ -864,7 +873,9 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<Annotation | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMeta, setErrorMeta] = useState<ErrorMeta | null>(null);
+  const [retryIn, setRetryIn] = useState<number | null>(null);
+  const [autoRetryTrigger, setAutoRetryTrigger] = useState(0);
   const [usage, setUsage] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -885,18 +896,18 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const limitReached = !unlimited && remaining <= 0;
 
   const handleFile = async (f: File) => {
-    setError(null); setResult(null);
+    setErrorMeta(null); setRetryIn(null); setResult(null);
     try {
       setFile(await fileToCompressedDataUrl(f));
     } catch {
-      setError("Could not read this image. Please try a PNG or JPG screenshot.");
+      setErrorMeta({ category: "network", statusCode: null, message: "Could not read this image. Please try a PNG or JPG screenshot.", retryDelay: null });
     }
   };
 
   const analyze = async () => {
     if (!file || loading) return;
     if (limitReached) return;
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setErrorMeta(null); setRetryIn(null); setResult(null);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 55_000);
     try {
@@ -908,9 +919,19 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
       });
       if (!res.ok) {
         const detail = await res.json().catch(() => null) as { error?: string } | null;
-        if (res.status === 429) throw new Error("Rate limit. Please try again shortly.");
-        if (res.status === 402) throw new Error("AI credits exhausted.");
-        throw new Error(detail?.error ?? "Chart analysis failed.");
+        if (res.status === 429) {
+          setErrorMeta({ category: "rate-limit", statusCode: 429, message: "Too many requests — the AI is busy. Auto-retrying in 15 seconds.", retryDelay: 15 });
+          setRetryIn(15);
+          return;
+        }
+        if (res.status === 402) {
+          setErrorMeta({ category: "credits", statusCode: 402, message: "AI credits are exhausted for this plan.", retryDelay: null });
+          return;
+        }
+        const msg = detail?.error ?? "Chart analysis failed — the server returned an unexpected response.";
+        setErrorMeta({ category: "server", statusCode: res.status, message: msg, retryDelay: 5 });
+        setRetryIn(5);
+        return;
       }
       const data = (await res.json()) as Annotation;
       setResult(data);
@@ -921,9 +942,10 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setError("Analysis is taking longer than expected — please try again.");
+        setErrorMeta({ category: "timeout", statusCode: null, message: "Analysis took longer than 55 seconds and was cancelled. The AI may be under heavy load.", retryDelay: 5 });
+        setRetryIn(5);
       } else {
-        setError(e instanceof Error ? e.message : "Analysis failed");
+        setErrorMeta({ category: "network", statusCode: null, message: e instanceof Error ? e.message : "Could not reach the analysis server — check your connection.", retryDelay: null });
       }
     } finally {
       clearTimeout(timeoutId);
@@ -931,7 +953,30 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
     }
   };
 
-  const reset = () => { setFile(null); setResult(null); setError(null); setSaved(false); };
+  useEffect(() => {
+    if (retryIn === null || retryIn <= 0) return;
+    const id = setTimeout(() => setRetryIn(n => (n !== null && n > 0) ? n - 1 : n), 1000);
+    return () => clearTimeout(id);
+  }, [retryIn]);
+
+  useEffect(() => {
+    if (retryIn !== 0) return;
+    setRetryIn(null);
+    setAutoRetryTrigger(n => n + 1);
+  }, [retryIn]);
+
+  useEffect(() => {
+    if (autoRetryTrigger === 0) return;
+    analyze();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRetryTrigger]);
+
+  const triggerRetry = () => {
+    setRetryIn(null);
+    setAutoRetryTrigger(n => n + 1);
+  };
+
+  const reset = () => { setFile(null); setResult(null); setErrorMeta(null); setRetryIn(null); setSaved(false); };
 
   const saveTrade = async () => {
     if (!user || !result || !file || saving) return;
@@ -1063,7 +1108,14 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
             </div>
           )}
 
-          {error && <p className="text-xs text-bearish">{error}</p>}
+          {errorMeta && (
+            <ErrorFeedbackPanel
+              meta={errorMeta}
+              retryIn={retryIn}
+              onRetryNow={triggerRetry}
+              onDismiss={() => { setErrorMeta(null); setRetryIn(null); }}
+            />
+          )}
           {result && <AnalysisReadout ann={result} />}
           {result && (
             <button
@@ -1078,6 +1130,87 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
         </div>
       )}
     </section>
+  );
+}
+
+function ErrorFeedbackPanel({
+  meta,
+  retryIn,
+  onRetryNow,
+  onDismiss,
+}: {
+  meta: ErrorMeta;
+  retryIn: number | null;
+  onRetryNow: () => void;
+  onDismiss: () => void;
+}) {
+  const cfg: Record<ErrorCategory, { label: string; color: string; icon: typeof Clock; hint: string }> = {
+    timeout:      { label: "TIMEOUT",      color: "text-amber-400 border-amber-400/40 bg-amber-400/10",    icon: Clock,          hint: "The AI took longer than expected. Usually resolves on retry." },
+    "rate-limit": { label: "RATE LIMIT",   color: "text-orange-400 border-orange-400/40 bg-orange-400/10", icon: RefreshCw,      hint: "Too many requests in a short window. Auto-retrying shortly." },
+    credits:      { label: "CREDITS",      color: "text-bearish border-bearish/40 bg-bearish/10",          icon: AlertTriangle,  hint: "Upgrade to Premium for unlimited AI chart analysis." },
+    server:       { label: "SERVER ERROR", color: "text-bearish border-bearish/40 bg-bearish/10",          icon: Server,         hint: "The analysis server returned an unexpected error." },
+    network:      { label: "NETWORK",      color: "text-muted-foreground border-border bg-card/60",        icon: WifiOff,        hint: "Could not reach the analysis server — check your connection." },
+  };
+  const { label, color, icon: Icon, hint } = cfg[meta.category];
+  const isAutoRetrying = retryIn !== null && retryIn > 0;
+  const pct = isAutoRetrying && meta.retryDelay ? (retryIn! / meta.retryDelay) * 100 : 0;
+
+  return (
+    <div className="rounded-xl border border-bearish/30 bg-bearish/5 p-3 space-y-2.5 animate-fade-up">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${color}`}>
+          <Icon className="w-3 h-3" />
+          {label}
+        </span>
+        {meta.statusCode && (
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-border bg-card/60 text-muted-foreground">
+            HTTP {meta.statusCode}
+          </span>
+        )}
+        <button
+          onClick={onDismiss}
+          className="ml-auto w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Dismiss error"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <p className="text-xs text-foreground/90 leading-relaxed">{meta.message}</p>
+      <p className="text-[10px] text-muted-foreground leading-snug">{hint}</p>
+
+      {isAutoRetrying && (
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Auto-retrying…</span>
+            <span className="font-mono font-bold text-foreground tabular-nums">{retryIn}s</span>
+          </div>
+          <div className="h-1 rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full bg-gradient-gold rounded-full transition-[width] duration-1000 ease-linear"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {meta.category !== "credits" ? (
+        <button
+          onClick={onRetryNow}
+          className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-lg bg-gradient-gold text-primary-foreground shadow-gold hover:opacity-90 transition-opacity"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          {isAutoRetrying ? "Retry Now" : "Try Again"}
+        </button>
+      ) : (
+        <a
+          href="#premium"
+          className="block text-center text-xs font-semibold py-2 rounded-lg border border-gold/40 bg-gold/10 text-gold hover:bg-gold/15 transition-colors"
+        >
+          Upgrade to Premium
+        </a>
+      )}
+    </div>
   );
 }
 
