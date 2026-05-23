@@ -1,6 +1,7 @@
-import { generateText } from "ai";
+// import { generateText } from "ai";          // re-enable with real AI
+// import { openai } from "@ai-sdk/openai";    // re-enable with real AI
 import { z } from "zod";
-import { openai } from "@ai-sdk/openai";
+import { mockAnalyzeChart, mockChat } from "./mock-analysis.js";
 
 type GoldQuote = { price: number; source: string; fetchedAt: number };
 
@@ -67,18 +68,22 @@ Tone: professional, calm, data-driven. No hype, no emojis. Use precise prices li
 
 export async function handleChat(body: { message?: string; history?: { role: "user" | "assistant"; content: string }[] }): Promise<{ status: number; body: unknown }> {
   try {
-    const { message, history } = body;
+    const { message } = body;
     if (!message?.trim()) return { status: 400, body: { error: "message required" } };
 
-    const { text } = await generateText({
-      model: openai("gpt-4o-mini"),
-      system: CHAT_SYSTEM_PROMPT,
-      messages: [
-        ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
-        { role: "user" as const, content: message },
-      ],
-    });
+    // ── Real AI (re-enable when API billing is active) ──────────────────────
+    // const { text } = await generateText({
+    //   model: openai("gpt-4o-mini"),
+    //   system: CHAT_SYSTEM_PROMPT,
+    //   messages: [
+    //     ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    //     { role: "user" as const, content: message },
+    //   ],
+    // });
+    // return { status: 200, body: { text } };
+    // ────────────────────────────────────────────────────────────────────────
 
+    const text = mockChat(message);
     return { status: 200, body: { text } };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
@@ -354,38 +359,33 @@ export async function handleAnalyzeChart(body: {
     }
 
     const mt = mimeType ?? "image/png";
-    let lastErr: unknown = null;
+    // ── Real AI (re-enable when API billing is active) ──────────────────────
+    // let lastErr: unknown = null;
+    // for (let attempt = 0; attempt < 2; attempt++) {
+    //   try {
+    //     const { text } = await generateText({
+    //       model: openai("gpt-4o"),
+    //       temperature: 0.2,
+    //       system: ANALYZE_SYSTEM,
+    //       messages: [{ role: "user", content: [
+    //         { type: "text", text: jsonInstruction() },
+    //         { type: "image", image: `data:${mt};base64,${imageBase64}` },
+    //       ]}],
+    //     });
+    //     const parsed = AnnotationSchema.parse(extractJsonObject(text));
+    //     return { status: 200, body: completeTradeSetup(parsed) };
+    //   } catch (e) {
+    //     lastErr = e;
+    //     if (/429|402/.test(String(e))) break;
+    //   }
+    // }
+    // throw lastErr ?? new Error("AI error");
+    // ────────────────────────────────────────────────────────────────────────
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        console.log(`[analyze-chart] calling OpenAI gpt-4o (attempt ${attempt + 1})`);
-        const { text } = await generateText({
-          model: openai("gpt-4o"),
-          temperature: 0.2,
-          system: ANALYZE_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: jsonInstruction() },
-                { type: "image", image: `data:${mt};base64,${imageBase64}` },
-              ],
-            },
-          ],
-        });
-        console.log(`[analyze-chart] OpenAI responded, textLen=${text.length}`);
-        const parsed = AnnotationSchema.parse(extractJsonObject(text));
-        console.log(`[analyze-chart] success bias=${parsed.bias} confidence=${parsed.confidence}`);
-        return { status: 200, body: completeTradeSetup(parsed) };
-      } catch (e) {
-        lastErr = e;
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[analyze-chart] attempt ${attempt + 1} failed: ${msg}`);
-        if (/429|402/.test(msg)) break;
-      }
-    }
-
-    throw lastErr ?? new Error("AI error");
+    console.log(`[analyze-chart] using mock engine, imageLen=${imageBase64.length}`);
+    const result = mockAnalyzeChart(imageBase64);
+    console.log(`[analyze-chart] mock result bias=${result.bias} confidence=${result.confidence}`);
+    return { status: 200, body: result };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
     const status = /429/.test(msg) ? 429 : /402/.test(msg) ? 402 : 500;
