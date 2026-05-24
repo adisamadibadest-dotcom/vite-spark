@@ -124,7 +124,7 @@ export function Landing() {
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Ready to trade smarter?</h2>
           <p className="mt-3 text-muted-foreground">Create your free account and run your first AI analysis in under a minute.</p>
           <ul className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-muted-foreground">
-            {["3 free analyses", "Alerts & watchlist", "Trade journal"].map((b) => (
+            {["5 free analyses", "Alerts & watchlist", "Trade journal"].map((b) => (
               <li key={b} className="flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-bullish" /> {b}
               </li>
