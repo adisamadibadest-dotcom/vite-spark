@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Eye, Plus, Trash2, BellRing, Loader2, CheckCircle2 } from "lucide-react";
+import { Bell, Eye, Plus, Trash2, BellRing, Loader2, CheckCircle2, BellOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { fetchGoldPrice } from "@/lib/gold-price";
+import {
+  notificationPermission,
+  requestNotificationPermission,
+  fireAlertNotification,
+  notificationsSupported,
+} from "@/lib/notifications";
 
 type Alert = {
   id: string;
@@ -30,6 +36,9 @@ export function AlertsWatchlistSection() {
   const [loading, setLoading] = useState(true);
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const firedRef = useRef<Set<string>>(new Set());
+  const [notifPerm, setNotifPerm] = useState<ReturnType<typeof notificationPermission>>(
+    () => notificationPermission()
+  );
 
   // form state
   const [direction, setDirection] = useState<"above" | "below">("above");
@@ -87,6 +96,7 @@ export function AlertsWatchlistSection() {
         description: `Now $${currentPrice.toFixed(2)}${a.note ? ` · ${a.note}` : ""}`,
         icon: <BellRing className="w-4 h-4 text-gold" />,
       });
+      fireAlertNotification(a.direction, Number(a.price), currentPrice, a.note);
       await supabase
         .from("alerts")
         .update({ status: "triggered", triggered_at: new Date().toISOString() })
@@ -118,7 +128,33 @@ export function AlertsWatchlistSection() {
     }
     setPrice(""); setNote("");
     toast.success("Alert created");
+    // Request browser notification permission on first alert if not yet granted
+    if (notificationsSupported() && Notification.permission === "default") {
+      const perm = await requestNotificationPermission();
+      setNotifPerm(perm);
+      if (perm === "granted") {
+        toast.success("Browser notifications enabled", {
+          description: "You'll get a pop-up when your alert triggers — even in another tab.",
+          icon: <BellRing className="w-4 h-4 text-gold" />,
+        });
+      }
+    }
     load();
+  };
+
+  const enableNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPerm(perm);
+    if (perm === "granted") {
+      toast.success("Browser notifications enabled", {
+        description: "You'll get a pop-up when your alert triggers — even in another tab.",
+        icon: <BellRing className="w-4 h-4 text-gold" />,
+      });
+    } else if (perm === "denied") {
+      toast.error("Notifications blocked", {
+        description: "Allow notifications in your browser settings to enable this feature.",
+      });
+    }
   };
 
   const deleteAlert = async (id: string) => {
@@ -152,11 +188,31 @@ export function AlertsWatchlistSection() {
       <div className="flex items-center gap-2">
         <Bell className="w-4 h-4 text-gold" />
         <h3 className="text-sm font-semibold">Alerts & Watchlist</h3>
-        {livePrice != null && (
-          <span className="ml-auto text-[10px] text-muted-foreground">
-            XAUUSD <span className="text-gold font-bold tabular-nums">${livePrice.toFixed(2)}</span>
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {livePrice != null && (
+            <span className="text-[10px] text-muted-foreground">
+              XAUUSD <span className="text-gold font-bold tabular-nums">${livePrice.toFixed(2)}</span>
+            </span>
+          )}
+          {notificationsSupported() && (
+            notifPerm === "granted" ? (
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-bullish bg-bullish/10 border border-bullish/25 px-1.5 py-0.5 rounded-full">
+                <BellRing className="w-2.5 h-2.5" /> Notifs on
+              </span>
+            ) : notifPerm === "denied" ? (
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground bg-card border border-border px-1.5 py-0.5 rounded-full" title="Notifications blocked in browser settings">
+                <BellOff className="w-2.5 h-2.5" /> Blocked
+              </span>
+            ) : (
+              <button
+                onClick={enableNotifications}
+                className="flex items-center gap-1 text-[10px] font-semibold text-gold bg-gold/10 border border-gold/30 hover:bg-gold/15 px-1.5 py-0.5 rounded-full transition-colors"
+              >
+                <Bell className="w-2.5 h-2.5" /> Enable notifs
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* ---------- ALERTS ---------- */}
