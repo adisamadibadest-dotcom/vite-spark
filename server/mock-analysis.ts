@@ -313,15 +313,102 @@ export function mockAnalyzeChart(imageBase64: string): ChartAnnotations {
   };
 }
 
+type PairInfo = { base: number; name: string; digits: number; swing: number };
+
+const PAIR_MAP: [RegExp, PairInfo][] = [
+  [/xau|gold/,                        { base: 4510,   name: "XAU/USD", digits: 2, swing: 18  }],
+  [/eur\/?usd|euro/,                  { base: 1.0850, name: "EUR/USD", digits: 5, swing: 0.0045 }],
+  [/gbp\/?usd|pound|cable|sterling/,  { base: 1.2750, name: "GBP/USD", digits: 5, swing: 0.0060 }],
+  [/usd\/?jpy|yen|jpy/,              { base: 157.50, name: "USD/JPY", digits: 3, swing: 0.65 }],
+  [/aud\/?usd|aussie/,                { base: 0.6520, name: "AUD/USD", digits: 5, swing: 0.0035 }],
+  [/usd\/?chf|swissy|chf/,           { base: 0.8950, name: "USD/CHF", digits: 5, swing: 0.0040 }],
+  [/usd\/?cad|loonie|cad/,           { base: 1.3650, name: "USD/CAD", digits: 5, swing: 0.0050 }],
+];
+
+function detectPair(msg: string): PairInfo {
+  const lc = msg.toLowerCase();
+  for (const [re, info] of PAIR_MAP) {
+    if (re.test(lc)) return info;
+  }
+  return PAIR_MAP[0][1]; // default: gold
+}
+
+function fmtP(n: number, digits: number): string {
+  return n.toFixed(digits);
+}
+
+function buildResponse(
+  template: (p: number, s: number, d: number, name: string) => string,
+  pair: PairInfo
+): string {
+  return template(pair.base, pair.swing, pair.digits, pair.name);
+}
+
+const PAIR_RESPONSES: Array<(p: number, s: number, d: number, name: string) => string> = [
+  // Bullish
+  (p, s, d, name) => `**Bias: Bullish** — Key level: ${fmtP(p - s, d)} demand.
+
+**Structure & Liquidity:** H4 BOS confirmed to the upside on ${name}. Buy-side liquidity resting at ${fmtP(p + s * 1.2, d)} (equal highs). Demand OB at ${fmtP(p - s * 1.6, d)}–${fmtP(p - s, d)} acting as launchpad.
+
+**Momentum:** RSI above 55 on H1, bullish divergence on M15. Volume expanding on up-candles — institutional participation evident.
+
+**Targets:** TP1 ${fmtP(p + s, d)}, TP2 ${fmtP(p + s * 2.2, d)}.
+
+**Invalidation:** H1 close below ${fmtP(p - s * 1.9, d)} flips bias neutral.
+
+*Risk note: Position sizing critical. Not financial advice.*`,
+
+  // Bearish
+  (p, s, d, name) => `**Bias: Bearish** — Key supply: ${fmtP(p + s * 0.8, d)}.
+
+**Structure & Liquidity:** CHOCH confirmed on H4 after rejection from weekly supply on ${name}. SSL pool at ${fmtP(p - s * 1.4, d)} is the primary target. Prior support at ${fmtP(p - s * 0.5, d)} now flipped to resistance.
+
+**Momentum:** RSI rolling over from 60, bearish divergence on H4. Rallies being sold aggressively — no follow-through buying.
+
+**Targets:** TP1 ${fmtP(p - s, d)}, TP2 ${fmtP(p - s * 2.5, d)}.
+
+**Invalidation:** Reclaim of ${fmtP(p + s * 1.1, d)} invalidates the short thesis.
+
+*Risk note: Keep stops tight above the supply. Not financial advice.*`,
+
+  // Neutral / Range
+  (p, s, d, name) => `**Bias: Neutral** — ${name} in equilibrium between ${fmtP(p - s * 1.7, d)} and ${fmtP(p + s * 1.7, d)}.
+
+**Structure & Liquidity:** No confirmed BOS in either direction. Liquidity pools on both sides of the range — smart money accumulation or distribution phase.
+
+**Momentum:** RSI ranging 40–55. Volume light and contracting. No displacement candles visible.
+
+**Targets:** Wait for a confirmed range break. Breakout above ${fmtP(p + s * 1.8, d)} is bullish; sustained break below ${fmtP(p - s * 1.8, d)} is bearish.
+
+**Invalidation:** N/A — waiting for structure confirmation before committing.
+
+*Risk note: Patience is a position. Not financial advice.*`,
+
+  // Swing / Higher TF bullish
+  (p, s, d, name) => `**Bias: Bullish** — Weekly demand confirmed at ${fmtP(p - s * 2.5, d)} on ${name}.
+
+**Structure & Liquidity:** Weekly BOS to the upside with clean impulse leg. FVG imbalance at ${fmtP(p - s * 1.2, d)}–${fmtP(p - s * 0.8, d)} acting as magnet for a pullback before continuation. Equal highs at ${fmtP(p + s * 3, d)} are the primary BSL target.
+
+**Momentum:** Strong bullish momentum — price extended but daily structure supports continuation. RSI holding 60+.
+
+**Targets:** TP1 ${fmtP(p + s * 1.5, d)}, TP2 ${fmtP(p + s * 3, d)}.
+
+**Invalidation:** Daily close below OB low at ${fmtP(p - s * 2.8, d)}.
+
+*Risk note: Manage partials at TP1. Not financial advice.*`,
+];
+
 export function mockChat(message: string): string {
   const seed = hash(message);
   const lc = message.toLowerCase();
-  const BASE = 4510;
+  const pair = detectPair(lc);
 
-  if (/bear|sell|short|down/.test(lc)) return CHAT_RESPONSES[1](BASE);
-  if (/neutral|range|consolidat|sideways/.test(lc)) return CHAT_RESPONSES[2](BASE);
-  if (/weekly|swing|higher tf|htf/.test(lc)) return CHAT_RESPONSES[3](BASE);
-  if (/bull|buy|long|up/.test(lc)) return CHAT_RESPONSES[0](BASE);
+  let responseIdx: number;
+  if (/bear|sell|short|down/.test(lc)) responseIdx = 1;
+  else if (/neutral|range|consolidat|sideways/.test(lc)) responseIdx = 2;
+  else if (/weekly|swing|higher tf|htf/.test(lc)) responseIdx = 3;
+  else if (/bull|buy|long|up/.test(lc)) responseIdx = 0;
+  else responseIdx = seed % PAIR_RESPONSES.length;
 
-  return pick(CHAT_RESPONSES, seed)(BASE);
+  return buildResponse(PAIR_RESPONSES[responseIdx], pair);
 }

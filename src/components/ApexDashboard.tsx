@@ -845,16 +845,16 @@ function ChatCard() {
     }
   };
 
-  const prompts = ["Gold outlook today?", "Key support levels?", "Risk on long here?"];
+  const prompts = ["Gold outlook today?", "EURUSD bias?", "GBPUSD key levels?"];
 
   return (
     <section className="rounded-2xl bg-gradient-card border border-border p-3 sm:p-4 animate-fade-up">
       <div className="flex items-center gap-2 mb-1">
         <Sparkles className="w-4 h-4 text-gold" />
         <h3 className="text-sm font-semibold">Ask ApexGold AI</h3>
-        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-bullish/15 text-bullish font-semibold">XAU/USD</span>
+        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-bullish/15 text-bullish font-semibold">Gold & FX Majors</span>
       </div>
-      <p className="text-[11px] text-muted-foreground mb-3">Institutional-style commentary in seconds.</p>
+      <p className="text-[11px] text-muted-foreground mb-3">Institutional SMC commentary on Gold & major forex pairs.</p>
 
       {messages.length > 0 && (
         <div className="mb-3">
