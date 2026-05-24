@@ -3,7 +3,30 @@
 import { z } from "zod";
 import { mockAnalyzeChart, mockChat } from "./mock-analysis.js";
 
-type GoldQuote = { price: number; source: string; fetchedAt: number };
+type GoldQuote = { price: number; source: string; fetchedAt: number; high24h?: number; low24h?: number; volume?: number };
+
+type YahooStats = { high24h: number; low24h: number; volume: number };
+
+async function fromYahooFinance(): Promise<YahooStats | null> {
+  try {
+    const r = await fetch(
+      "https://query2.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d",
+      { headers: { "User-Agent": "Mozilla/5.0", accept: "application/json" } }
+    );
+    if (!r.ok) return null;
+    const j = (await r.json()) as {
+      chart?: { result?: { meta?: { regularMarketDayHigh?: number; regularMarketDayLow?: number; regularMarketVolume?: number } }[] };
+    };
+    const meta = j?.chart?.result?.[0]?.meta;
+    const high24h = meta?.regularMarketDayHigh;
+    const low24h = meta?.regularMarketDayLow;
+    const volume = meta?.regularMarketVolume;
+    if (typeof high24h === "number" && typeof low24h === "number" && high24h > 500 && low24h > 500) {
+      return { high24h: +high24h.toFixed(2), low24h: +low24h.toFixed(2), volume: volume ?? 0 };
+    }
+  } catch {}
+  return null;
+}
 
 async function fromGoldApi(): Promise<GoldQuote | null> {
   try {
@@ -41,15 +64,18 @@ async function requireQuote(source: Promise<GoldQuote | null>): Promise<GoldQuot
 }
 
 export async function handleGoldPrice(): Promise<{ status: number; headers: Record<string, string>; body: unknown }> {
-  const quote = await Promise.any([
-    requireQuote(fromGoldApi()),
-    requireQuote(fromMetalsLive()),
-  ]).catch(() => null);
+  const [quote, stats] = await Promise.all([
+    Promise.any([
+      requireQuote(fromGoldApi()),
+      requireQuote(fromMetalsLive()),
+    ]).catch(() => null),
+    fromYahooFinance(),
+  ]);
   if (!quote) return { status: 502, headers: {}, body: { error: "Unable to fetch gold price" } };
   return {
     status: 200,
     headers: { "cache-control": "no-store, must-revalidate" },
-    body: quote,
+    body: { ...quote, ...(stats ?? {}) },
   };
 }
 

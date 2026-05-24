@@ -1,7 +1,7 @@
 // Live XAU/USD spot price. Multi-source with fast failover to keep the
 // quote as close to MT5 mid-price as possible.
 
-export type GoldQuote = { price: number; source: string; fetchedAt: number };
+export type GoldQuote = { price: number; source: string; fetchedAt: number; high24h?: number; low24h?: number; volume?: number };
 
 const isSane = (n: unknown): n is number =>
   typeof n === "number" && Number.isFinite(n) && n > 500 && n < 10000;

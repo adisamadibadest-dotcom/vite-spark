@@ -98,6 +98,9 @@ export function ApexDashboard() {
   const [price, setPrice] = useState<number | null>(null);
   const [prev, setPrev] = useState<number | null>(null);
   const [open24h, setOpen24h] = useState<number | null>(null);
+  const [high24h, setHigh24h] = useState<number | null>(null);
+  const [low24h, setLow24h] = useState<number | null>(null);
+  const [volume, setVolume] = useState<number | null>(null);
   const [updatedAt, setUpdatedAt] = useState(Date.now());
   const [tick, setTick] = useState(0);
 
@@ -116,6 +119,9 @@ export function ApexDashboard() {
           return q.price;
         });
         setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
+        if (q.high24h) setHigh24h(q.high24h);
+        if (q.low24h) setLow24h(q.low24h);
+        if (q.volume) setVolume(q.volume);
         setUpdatedAt(q.fetchedAt);
         setTick((t) => t + 1);
       }
@@ -132,7 +138,7 @@ export function ApexDashboard() {
     <div className="min-h-screen w-full pb-10">
       <Header />
       <main className="px-3 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-3 sm:space-y-4 pt-3 sm:pt-4">
-        <GoldMarketCard price={price} prev={prev} open24h={open24h} updatedAt={updatedAt} tick={tick} />
+        <GoldMarketCard price={price} prev={prev} open24h={open24h} high24h={high24h} low24h={low24h} volume={volume} updatedAt={updatedAt} tick={tick} />
         <BiasCard />
         <MarketSessions />
         <SignalsSection price={price} />
@@ -216,15 +222,30 @@ function ProfileMenu() {
 
 
 /* ---------------- Live Gold Card ---------------- */
+function fmtVol(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return v.toString();
+}
+
+function computeSpread(high: number, low: number): string {
+  const h = new Date().getUTCHours();
+  const factor = h >= 12 && h < 17 ? 0.0025 : h >= 7 && h < 12 ? 0.003 : h >= 17 && h < 21 ? 0.004 : 0.006;
+  return Math.max(0.10, +((high - low) * factor).toFixed(2)).toFixed(2);
+}
+
 type GoldMarketCardProps = {
   price: number | null;
   prev: number | null;
   open24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
+  volume: number | null;
   updatedAt: number;
   tick: number;
 };
 
-function GoldMarketCard({ price, prev, open24h, updatedAt, tick }: GoldMarketCardProps) {
+function GoldMarketCard({ price, prev, open24h, high24h, low24h, volume, updatedAt, tick }: GoldMarketCardProps) {
 
   const displayPrice = price ?? 0;
   const baseline = open24h ?? displayPrice;
@@ -287,10 +308,10 @@ function GoldMarketCard({ price, prev, open24h, updatedAt, tick }: GoldMarketCar
 
       <div className="grid grid-cols-4 gap-px bg-border">
         {[
-          { l: "24h H", v: "$2,425.10" },
-          { l: "24h L", v: "$2,389.40" },
-          { l: "Vol", v: "184.2K" },
-          { l: "Spread", v: "0.18" },
+          { l: "24H H", v: high24h ? `$${high24h.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—" },
+          { l: "24H L", v: low24h ? `$${low24h.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—" },
+          { l: "VOL", v: volume ? fmtVol(volume) : "—" },
+          { l: "SPREAD", v: high24h && low24h ? computeSpread(high24h, low24h) : "—" },
         ].map((s) => (
           <div key={s.l} className="bg-card px-2 py-2 text-center">
             <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{s.l}</div>
