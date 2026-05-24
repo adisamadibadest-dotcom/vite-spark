@@ -1580,6 +1580,11 @@ function PremiumSection() {
 }
 
 /* ---------------- Admin Panel ---------------- */
+async function getAuthToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 function AdminPanel() {
   const { isAdmin, loading } = useAccess();
   const [email, setEmail] = useState("");
@@ -1590,16 +1595,14 @@ function AdminPanel() {
   const [subs, setSubs] = useState<Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>>([]);
 
   const loadSubs = async () => {
-    const { data } = await supabase
-      .from("subscriptions")
-      .select("id, user_id, plan, status, expires_at")
-      .order("expires_at", { ascending: false })
-      .limit(50);
-    if (!data) return;
-    const ids = Array.from(new Set(data.map((s) => s.user_id)));
-    const { data: profs } = await supabase.from("profiles").select("id, email").in("id", ids);
-    const map = new Map((profs ?? []).map((p) => [p.id, p.email]));
-    setSubs(data.map((s) => ({ ...s, email: map.get(s.user_id) })));
+    const token = await getAuthToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/subscriptions", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json() as Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>;
+    setSubs(data);
   };
 
   useEffect(() => { if (isAdmin) loadSubs(); }, [isAdmin]);
@@ -1609,15 +1612,16 @@ function AdminPanel() {
   const grant = async () => {
     setBusy(true); setMsg(null);
     try {
-      const { data: prof, error: pErr } = await supabase
-        .from("profiles").select("id").eq("email", email.trim().toLowerCase()).maybeSingle();
-      if (pErr) throw pErr;
-      if (!prof) throw new Error("No user with that email. They must sign up first.");
-      const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from("subscriptions").insert({
-        user_id: prof.id, plan, status: "active", expires_at: expires,
+      const token = await getAuthToken();
+      if (!token) throw new Error("Not authenticated.");
+      const res = await fetch("/api/admin/grant-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), plan, days }),
       });
-      if (error) throw error;
+      const json = await res.json() as { ok?: boolean; expires?: string; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to grant subscription.");
+      const expires = json.expires!;
       setMsg({ tone: "ok", text: `Granted ${plan} until ${new Date(expires).toLocaleDateString()}.` });
       setEmail("");
       await loadSubs();
@@ -1630,14 +1634,23 @@ function AdminPanel() {
 
   const terminate = async (id: string) => {
     setBusy(true);
-    const { error } = await supabase
-      .from("subscriptions")
-      .update({ status: "terminated", expires_at: new Date().toISOString() })
-      .eq("id", id);
-    setBusy(false);
-    if (error) { setMsg({ tone: "err", text: error.message }); return; }
-    setMsg({ tone: "ok", text: "Subscription terminated." });
-    await loadSubs();
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error("Not authenticated.");
+      const res = await fetch("/api/admin/terminate-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to terminate.");
+      setMsg({ tone: "ok", text: "Subscription terminated." });
+      await loadSubs();
+    } catch (e) {
+      setMsg({ tone: "err", text: e instanceof Error ? e.message : "Failed to terminate." });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

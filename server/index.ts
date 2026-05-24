@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { handleGoldPrice, handleChat, handleAnalyzeChart } from "./handlers.js";
+import { registerAdminRoutes } from "./admin.js";
 
 const app = express();
 app.use(cors());
@@ -25,6 +26,8 @@ app.post("/api/analyze-chart", async (req, res) => {
   );
   res.status(result.status).json(result.body);
 });
+
+registerAdminRoutes(app);
 
 const PORT = Number(process.env.API_PORT ?? 3001);
 app.listen(PORT, () => {
