@@ -8,7 +8,12 @@ const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 
 let _pool: InstanceType<typeof Pool> | null = null;
 function getPool() {
-  if (!_pool) _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  if (!_pool) _pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 3000,
+    idleTimeoutMillis: 10000,
+    max: 3,
+  });
   return _pool;
 }
 
@@ -102,7 +107,7 @@ export function registerAdminRoutes(app: Express) {
         .single();
       if (insertErr) { res.status(500).json({ error: insertErr.message }); return; }
 
-      await writeAudit({ action: "grant", target_email: email.trim().toLowerCase(), plan, days, expires_at: expires, sub_id: newSub?.id });
+      void writeAudit({ action: "grant", target_email: email.trim().toLowerCase(), plan, days, expires_at: expires, sub_id: newSub?.id });
       res.json({ ok: true, expires });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
@@ -148,7 +153,7 @@ export function registerAdminRoutes(app: Express) {
         .eq("id", id);
       if (error) { res.status(500).json({ error: error.message }); return; }
 
-      await writeAudit({ action: "terminate", target_email: email, sub_id: id });
+      void writeAudit({ action: "terminate", target_email: email, sub_id: id });
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
@@ -170,7 +175,8 @@ export function registerAdminRoutes(app: Express) {
       );
       res.json(result.rows);
     } catch (e) {
-      res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
+      console.error("[audit-log] DB unavailable, returning empty:", e);
+      res.json([]);
     }
   });
 }
