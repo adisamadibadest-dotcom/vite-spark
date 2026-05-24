@@ -60,7 +60,7 @@ export function Landing() {
             to="/login"
             className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-gradient-gold text-primary-foreground font-semibold shadow-gold hover:opacity-95 transition-opacity"
           >
-            Start free — 3 analyses <ArrowRight className="w-4 h-4" />
+            Start free — 5 analyses <ArrowRight className="w-4 h-4" />
           </Link>
           <a
             href="#features"
