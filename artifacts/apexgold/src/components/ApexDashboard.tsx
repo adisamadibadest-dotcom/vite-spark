@@ -58,6 +58,7 @@ const WHATSAPP_MSG = encodeURIComponent(
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
 const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 const FREE_TRIAL_LIMIT = 5;
+const COOLDOWN_SECS = 60;
 
 async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean }> {
   const sourceUrl = URL.createObjectURL(file);
@@ -900,6 +901,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const [usage, setUsage] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     if (!loading) { setElapsed(0); return; }
@@ -913,7 +915,21 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
     setUsage(Number(localStorage.getItem("apex_trial_uses") ?? 0));
   }, []);
 
+  useEffect(() => {
+    if (unlimited) { setCooldown(0); return; }
+    const last = Number(localStorage.getItem("apex_last_analysis") ?? 0);
+    const elapsed = Math.floor((Date.now() - last) / 1000);
+    setCooldown(Math.max(0, COOLDOWN_SECS - elapsed));
+  }, [unlimited]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
   const remaining = Math.max(0, FREE_TRIAL_LIMIT - usage);
+  const inCooldown = !unlimited && cooldown > 0;
   const limitReached = !unlimited && remaining <= 0;
 
   const handleFile = async (f: File) => {
@@ -927,7 +943,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
 
   const analyze = async () => {
     if (!file || loading) return;
-    if (limitReached) return;
+    if (limitReached || inCooldown) return;
     setLoading(true); setErrorMeta(null); setRetryIn(null); setResult(null);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 55_000);
@@ -960,6 +976,8 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
         const next = usage + 1;
         setUsage(next);
         localStorage.setItem("apex_trial_uses", String(next));
+        localStorage.setItem("apex_last_analysis", String(Date.now()));
+        setCooldown(COOLDOWN_SECS);
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
@@ -1109,18 +1127,28 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
           {!result && !loading && (
             <button
               onClick={analyze}
-              disabled={limitReached}
+              disabled={limitReached || inCooldown}
               className="w-full bg-gradient-gold text-primary-foreground font-semibold py-2.5 rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity shadow-gold text-sm flex items-center justify-center gap-2"
             >
-              <Zap className="w-4 h-4" />
-              {limitReached ? "Trial Limit Reached" : "Analyze Chart"}
+              {inCooldown ? <Clock className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+              {limitReached ? "Trial Limit Reached" : inCooldown ? `Next analysis in ${cooldown}s` : "Analyze Chart"}
             </button>
+          )}
+
+          {inCooldown && !limitReached && !result && (
+            <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+              <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
+              <p className="text-xs font-semibold text-muted-foreground">Cooldown active</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                You can run the next free analysis in <span className="text-gold font-bold tabular-nums">{cooldown}s</span>.
+              </p>
+            </div>
           )}
 
           {limitReached && !result && (
             <div className="rounded-xl border border-gold/40 bg-gold/5 p-3 text-center">
               <Crown className="w-5 h-5 text-gold mx-auto mb-1" />
-              <p className="text-xs font-semibold">You've used your 3 free analyses</p>
+              <p className="text-xs font-semibold">You've used your {FREE_TRIAL_LIMIT} free analyses</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Upgrade to Premium for unlimited chart analysis.</p>
               <a href={WHATSAPP_URL} target="_blank" rel="noreferrer"
                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gradient-gold text-primary-foreground shadow-gold">
