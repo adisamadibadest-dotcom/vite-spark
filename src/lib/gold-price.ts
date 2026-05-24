@@ -14,7 +14,14 @@ async function fromOwnApi(): Promise<GoldQuote | null> {
     if (!ct.includes("application/json")) return null;
     const j = (await r.json()) as Partial<GoldQuote>;
     if (isSane(j.price)) {
-      return { price: +j.price.toFixed(2), source: j.source ?? "api", fetchedAt: j.fetchedAt ?? Date.now() };
+      return {
+        price: +j.price.toFixed(2),
+        source: j.source ?? "api",
+        fetchedAt: j.fetchedAt ?? Date.now(),
+        ...(isSane(j.high24h) && { high24h: j.high24h }),
+        ...(isSane(j.low24h) && { low24h: j.low24h }),
+        ...(typeof j.volume === "number" && j.volume > 0 && { volume: j.volume }),
+      };
     }
   } catch {}
   return null;
