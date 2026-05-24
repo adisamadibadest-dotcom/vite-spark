@@ -57,7 +57,7 @@ const WHATSAPP_MSG = encodeURIComponent(
 );
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
 const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
-const FREE_TRIAL_LIMIT = 3;
+const FREE_TRIAL_LIMIT = 5;
 
 async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean }> {
   const sourceUrl = URL.createObjectURL(file);
@@ -311,24 +311,36 @@ function RelativeTime({ ts }: { ts: number }) {
   return <span className="tabular-nums">{seconds}s ago</span>;
 }
 
+function biasSeededRand(seed: number): number {
+  const x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
 /* ---------------- Bias Card ---------------- */
 function BiasCard() {
   const [bias, setBias] = useState<Bias>("bullish");
+  const [timeSeed, setTimeSeed] = useState(() => Math.floor(Date.now() / 120_000));
+
+  useEffect(() => {
+    const id = setInterval(() => setTimeSeed(Math.floor(Date.now() / 120_000)), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const tfData = useMemo(() => {
-    const map: Record<Bias, number[]> = {
-      bullish: [78, 65, 71, 60],
-      bearish: [22, 35, 29, 40],
-      neutral: [50, 52, 48, 51],
+    const ranges: Record<Bias, [number, number]> = {
+      bullish: [56, 84],
+      bearish: [16, 44],
+      neutral: [41, 59],
     };
-    const v = map[bias];
-    return [
-      { label: "15m", value: v[0] },
-      { label: "1H",  value: v[1] },
-      { label: "4H",  value: v[2] },
-      { label: "1D",  value: v[3] },
-    ];
-  }, [bias]);
+    const [lo, hi] = ranges[bias];
+    const biasOffset = bias === "bullish" ? 1 : bias === "bearish" ? 2 : 3;
+    const labels = ["15m", "1H", "4H", "1D"];
+    return labels.map((label, i) => {
+      const r = biasSeededRand(timeSeed * 7 + i * 13 + biasOffset * 31);
+      const value = Math.round(lo + r * (hi - lo));
+      return { label, value };
+    });
+  }, [bias, timeSeed]);
 
   const overall = Math.round(tfData.reduce((a, b) => a + b.value, 0) / tfData.length);
   const confidence = bias === "neutral" ? 50 : Math.abs(overall - 50) * 2;
