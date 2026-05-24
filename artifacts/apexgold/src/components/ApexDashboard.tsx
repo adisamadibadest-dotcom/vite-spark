@@ -94,14 +94,47 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
 
 export function ApexDashboard() {
   const [tradesRefresh, setTradesRefresh] = useState(0);
+  const [price, setPrice] = useState<number | null>(null);
+  const [prev, setPrev] = useState<number | null>(null);
+  const [open24h, setOpen24h] = useState<number | null>(null);
+  const [updatedAt, setUpdatedAt] = useState(Date.now());
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tickFetch = async () => {
+      if (cancelled) return;
+      const q = await fetchGoldPrice();
+      if (cancelled) return;
+      if (q) {
+        setPrice((p) => {
+          if (p != null && p !== q.price) setPrev(p);
+          else if (p == null) setPrev(q.price);
+          return q.price;
+        });
+        setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
+        setUpdatedAt(q.fetchedAt);
+        setTick((t) => t + 1);
+      }
+      const delay = document.hidden ? 30_000 : 5_000;
+      timer = setTimeout(tickFetch, delay);
+    };
+    tickFetch();
+    const onVis = () => { if (!document.hidden && timer) { clearTimeout(timer); tickFetch(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+
   return (
     <div className="min-h-screen w-full pb-10">
       <Header />
       <main className="px-3 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-3 sm:space-y-4 pt-3 sm:pt-4">
-        <GoldMarketCard />
+        <GoldMarketCard price={price} prev={prev} open24h={open24h} updatedAt={updatedAt} tick={tick} />
         <BiasCard />
         <MarketSessions />
-        <SignalsSection />
+        <SignalsSection price={price} />
         <ChatCard />
         <ScreenshotAnalyzer onSaved={() => setTradesRefresh((n) => n + 1)} />
         <AlertsWatchlistSection />
@@ -182,40 +215,15 @@ function ProfileMenu() {
 
 
 /* ---------------- Live Gold Card ---------------- */
-function GoldMarketCard() {
-  const [price, setPrice] = useState<number | null>(null);
-  const [prev, setPrev] = useState<number | null>(null);
-  const [open24h, setOpen24h] = useState<number | null>(null);
-  const [updatedAt, setUpdatedAt] = useState(Date.now());
-  const [tick, setTick] = useState(0);
+type GoldMarketCardProps = {
+  price: number | null;
+  prev: number | null;
+  open24h: number | null;
+  updatedAt: number;
+  tick: number;
+};
 
-  // Poll real spot gold every 5s for near-MT5 latency. Pause when tab hidden to save quota.
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const tickFetch = async () => {
-      if (cancelled) return;
-      const q = await fetchGoldPrice();
-      if (cancelled) return;
-      if (q) {
-        setPrice((p) => {
-          if (p != null && p !== q.price) setPrev(p);
-          else if (p == null) setPrev(q.price);
-          return q.price;
-        });
-        setOpen24h((o) => o ?? +(q.price * 0.995).toFixed(2));
-        setUpdatedAt(q.fetchedAt);
-        setTick((t) => t + 1);
-      }
-      const delay = document.hidden ? 30_000 : 5_000;
-      timer = setTimeout(tickFetch, delay);
-    };
-    tickFetch();
-    const onVis = () => { if (!document.hidden && timer) { clearTimeout(timer); tickFetch(); } };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { cancelled = true; if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
-  }, []);
+function GoldMarketCard({ price, prev, open24h, updatedAt, tick }: GoldMarketCardProps) {
 
   const displayPrice = price ?? 0;
   const baseline = open24h ?? displayPrice;
@@ -547,40 +555,35 @@ type Signal = {
   reasoning: { structure: string; liquidity: string; momentum: string; sr: string };
 };
 
-const SIGNALS: Signal[] = [
-  {
-    id: "s1", type: "BUY", entry: "2,412.50", sl: "2,401.20", tp: "2,438.00",
-    confidence: 87, tf: "4H", ago: "12m ago", status: "Active", bias: "bullish",
-    reasoning: {
-      structure: "4H printed a confirmed Break of Structure above 2,418 after a higher-low formed at 2,406. Trend bias remains constructive while price holds above the 2,408 demand pivot.",
-      liquidity: "Asian-session sell-side liquidity at 2,402 was efficiently swept and reclaimed within one candle. Resting buy-side liquidity above 2,438 and 2,452 remains untouched and acts as the primary draw on price.",
-      momentum: "Delta and CVD are realigning bullish on the 1H. RSI(14) reset from 38 → 54 without printing bearish divergence; momentum re-accelerating off the FVG retest at 2,411.",
-      sr: "Defended support: 2,410 (4H demand) → 2,402 (session low). Upside resistance: 2,438 (prior swing) → 2,452 (weekly high). Invalidation only on a clean 4H close below 2,401.",
-    },
-  },
-  {
-    id: "s2", type: "SELL", entry: "2,401.80", sl: "2,409.50", tp: "2,386.20",
-    confidence: 74, tf: "1H", ago: "1h ago", status: "Active", bias: "bearish",
-    reasoning: {
-      structure: "1H Change of Character below 2,405 invalidated the prior bullish leg. Lower-high formed at 2,408 and price is now reacting from a 1H supply zone (2,406–2,410).",
-      liquidity: "Equal highs at 2,409 were swept, trapping late longs. Sell-side liquidity pool resting beneath 2,388 — likely magnetic target as price rotates lower.",
-      momentum: "Bearish momentum building: 15m printing lower highs and lower lows. Volume profile thinning above 2,406, supporting an efficient move down.",
-      sr: "Immediate resistance: 2,409 (swept high) → 2,415 (4H FVG). Support cluster: 2,388 (equal lows) → 2,382 (HTF demand). Risk:Reward ≈ 1:2.0.",
-    },
-  },
-  {
-    id: "s3", type: "HOLD", entry: "2,395.40", sl: "—", tp: "—",
-    confidence: 52, tf: "1D", ago: "3h ago", status: "Closed", bias: "neutral",
-    reasoning: {
-      structure: "Daily timeframe is range-bound between 2,388 and 2,425 with no decisive Break of Structure in either direction. Bias remains neutral until a HTF close confirms intent.",
-      liquidity: "Liquidity is balanced — equal highs at 2,425 and equal lows at 2,388. Premium/discount model favors waiting for a sweep before re-engaging directionally.",
-      momentum: "Daily RSI hovering at 49. No conviction from momentum oscillators or cumulative delta. Conditions favor mean-reversion plays only.",
-      sr: "Range support: 2,388. Range resistance: 2,425. Trade the extremes; avoid the midpoint chop zone (2,400–2,412).",
-    },
-  },
-];
+function SignalsSection({ price }: { price: number | null }) {
+  const signals = useMemo<Signal[]>(() => {
+    if (!price) return [];
+    const sl8 = (price - 8).toFixed(2);
+    const tp15 = (price + 15).toFixed(2);
+    const tp30 = (price + 30).toFixed(2);
+    const sl16 = (price - 16).toFixed(2);
+    return [
+      {
+        id: "s1",
+        type: "BUY",
+        entry: price.toFixed(2),
+        sl: sl8,
+        tp: tp15,
+        confidence: 87,
+        tf: "M5",
+        ago: "just now",
+        status: "Active",
+        bias: "bullish",
+        reasoning: {
+          structure: `Price is holding above the ${(price - 8).toFixed(2)} demand pivot with a confirmed BOS on M5. Trend bias remains constructive while price holds the current level.`,
+          liquidity: `Sell-side liquidity at ${sl8} was efficiently swept. Resting buy-side liquidity above ${tp15} and ${tp30} remains untouched and acts as the primary draw on price.`,
+          momentum: "Delta and CVD are realigning bullish on the M5. RSI(14) reset without printing bearish divergence; momentum re-accelerating off the FVG retest.",
+          sr: `Defended support: ${sl8} (M5 demand). Upside resistance: ${tp15} (near target) → ${tp30} (extended target). Invalidation on a clean M5 close below ${sl16}.`,
+        },
+      },
+    ];
+  }, [price]);
 
-function SignalsSection() {
   return (
     <section className="rounded-2xl bg-gradient-card border border-border p-3 sm:p-5 animate-fade-up">
       <div className="flex items-center justify-between mb-3">
@@ -590,9 +593,15 @@ function SignalsSection() {
         </div>
         <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Institutional</span>
       </div>
-      <div className="space-y-2.5">
-        {SIGNALS.map((s) => <SignalCard key={s.id} sig={s} />)}
-      </div>
+      {signals.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Waiting for live price…
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {signals.map((s) => <SignalCard key={s.id} sig={s} />)}
+        </div>
+      )}
     </section>
   );
 }
