@@ -857,21 +857,33 @@ function ChatCard() {
       <p className="text-[11px] text-muted-foreground mb-3">Institutional-style commentary in seconds.</p>
 
       {messages.length > 0 && (
-        <div ref={scrollRef} className="max-h-72 overflow-y-auto space-y-2 mb-3 pr-1">
-          {messages.map((m, i) => (
-            <div key={i} className={`text-xs leading-relaxed rounded-xl px-3 py-2 ${
-              m.role === "user"
-                ? "bg-gold/10 border border-gold/20 text-foreground ml-6"
-                : "bg-card border border-border mr-6 whitespace-pre-wrap"
-            }`}>
-              {m.content}
-            </div>
-          ))}
-          {loading && (
-            <div className="bg-card border border-border rounded-xl px-3 py-2 mr-6 flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-gold" /> Analyzing market…
-            </div>
-          )}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Conversation</span>
+            <button
+              onClick={() => { setMessages([]); setError(null); }}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded hover:bg-accent"
+              title="Clear conversation"
+            >
+              <X className="w-3 h-3" /> Clear
+            </button>
+          </div>
+          <div ref={scrollRef} className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            {messages.map((m, i) => (
+              <div key={i} className={`text-xs leading-relaxed rounded-xl px-3 py-2 ${
+                m.role === "user"
+                  ? "bg-gold/10 border border-gold/20 text-foreground ml-6"
+                  : "bg-card border border-border mr-6 whitespace-pre-wrap"
+              }`}>
+                {m.content}
+              </div>
+            ))}
+            {loading && (
+              <div className="bg-card border border-border rounded-xl px-3 py-2 mr-6 flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-gold" /> Analyzing market…
+              </div>
+            )}
+          </div>
         </div>
       )}
 
