@@ -1,7 +1,58 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Request, Response, Express } from "express";
+import pkg from "pg";
+
+const { Pool } = pkg;
 
 const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
+
+let _pool: InstanceType<typeof Pool> | null = null;
+function getPool() {
+  if (!_pool) _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  return _pool;
+}
+
+async function ensureAuditTable() {
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id         SERIAL PRIMARY KEY,
+      action     TEXT        NOT NULL,
+      target_email TEXT,
+      plan       TEXT,
+      days       INT,
+      expires_at TIMESTAMPTZ,
+      sub_id     TEXT,
+      performed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+async function writeAudit(entry: {
+  action: string;
+  target_email?: string;
+  plan?: string;
+  days?: number;
+  expires_at?: string;
+  sub_id?: string;
+}) {
+  try {
+    await ensureAuditTable();
+    await getPool().query(
+      `INSERT INTO admin_audit_log (action, target_email, plan, days, expires_at, sub_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        entry.action,
+        entry.target_email ?? null,
+        entry.plan ?? null,
+        entry.days ?? null,
+        entry.expires_at ?? null,
+        entry.sub_id ?? null,
+      ]
+    );
+  } catch (e) {
+    console.error("[audit] write failed:", e);
+  }
+}
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL;
@@ -44,8 +95,14 @@ export function registerAdminRoutes(app: Express) {
       if (!prof) { res.status(404).json({ error: `No registered user found with email "${email.trim()}". Make sure they have signed up first.` }); return; }
 
       const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      const { error: insertErr } = await admin.from("subscriptions").insert({ user_id: prof.id, plan, status: "active", expires_at: expires });
+      const { data: newSub, error: insertErr } = await admin
+        .from("subscriptions")
+        .insert({ user_id: prof.id, plan, status: "active", expires_at: expires })
+        .select("id")
+        .single();
       if (insertErr) { res.status(500).json({ error: insertErr.message }); return; }
+
+      await writeAudit({ action: "grant", target_email: email.trim().toLowerCase(), plan, days, expires_at: expires, sub_id: newSub?.id });
       res.json({ ok: true, expires });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
@@ -81,7 +138,7 @@ export function registerAdminRoutes(app: Express) {
     if (!verified.ok) { res.status(401).json({ error: verified.error }); return; }
     if (verified.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) { res.status(403).json({ error: "Forbidden: admin only." }); return; }
 
-    const { id } = req.body as { id?: string };
+    const { id, email } = req.body as { id?: string; email?: string };
     if (!id) { res.status(400).json({ error: "id is required." }); return; }
 
     try {
@@ -90,7 +147,28 @@ export function registerAdminRoutes(app: Express) {
         .update({ status: "terminated", expires_at: new Date().toISOString() })
         .eq("id", id);
       if (error) { res.status(500).json({ error: error.message }); return; }
+
+      await writeAudit({ action: "terminate", target_email: email, sub_id: id });
       res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
+    }
+  });
+
+  app.get("/api/admin/audit-log", async (req: Request, res: Response) => {
+    const verified = await verifyAdminJwt(req.headers.authorization);
+    if (!verified.ok) { res.status(401).json({ error: verified.error }); return; }
+    if (verified.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) { res.status(403).json({ error: "Forbidden: admin only." }); return; }
+
+    try {
+      await ensureAuditTable();
+      const result = await getPool().query(
+        `SELECT id, action, target_email, plan, days, expires_at, sub_id, performed_at
+         FROM admin_audit_log
+         ORDER BY performed_at DESC
+         LIMIT 100`
+      );
+      res.json(result.rows);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : "Server error." });
     }

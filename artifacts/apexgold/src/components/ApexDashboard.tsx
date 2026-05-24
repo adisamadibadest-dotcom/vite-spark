@@ -1573,6 +1573,8 @@ async function getAuthToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+type AuditEntry = { id: number; action: string; target_email?: string; plan?: string; days?: number; expires_at?: string; performed_at: string };
+
 function AdminPanel() {
   const { isAdmin, loading } = useAccess();
   const [email, setEmail] = useState("");
@@ -1581,6 +1583,7 @@ function AdminPanel() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [subs, setSubs] = useState<Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>>([]);
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   const loadSubs = async () => {
     const token = await getAuthToken();
@@ -1593,7 +1596,17 @@ function AdminPanel() {
     setSubs(data);
   };
 
-  useEffect(() => { if (isAdmin) loadSubs(); }, [isAdmin]);
+  const loadAuditLog = async () => {
+    const token = await getAuthToken();
+    if (!token) return;
+    const res = await fetch("/api/admin/audit-log", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    setAuditLog(await res.json() as AuditEntry[]);
+  };
+
+  useEffect(() => { if (isAdmin) { loadSubs(); loadAuditLog(); } }, [isAdmin]);
 
   if (loading || !isAdmin) return null;
 
@@ -1620,7 +1633,7 @@ function AdminPanel() {
     }
   };
 
-  const terminate = async (id: string) => {
+  const terminate = async (id: string, userEmail?: string) => {
     setBusy(true);
     try {
       const token = await getAuthToken();
@@ -1628,12 +1641,12 @@ function AdminPanel() {
       const res = await fetch("/api/admin/terminate-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, email: userEmail }),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to terminate.");
       setMsg({ tone: "ok", text: "Subscription terminated." });
-      await loadSubs();
+      await Promise.all([loadSubs(), loadAuditLog()]);
     } catch (e) {
       setMsg({ tone: "err", text: e instanceof Error ? e.message : "Failed to terminate." });
     } finally {
@@ -1693,7 +1706,7 @@ function AdminPanel() {
                 {new Date(s.expires_at).toLocaleDateString()}
               </span>
               {!expired ? (
-                <button onClick={() => terminate(s.id)} disabled={busy}
+                <button onClick={() => terminate(s.id, s.email)} disabled={busy}
                   className="text-[10px] px-2 py-1 rounded border border-bearish/40 text-bearish hover:bg-bearish/10">
                   Terminate
                 </button>
@@ -1704,6 +1717,30 @@ function AdminPanel() {
           );
         })}
       </div>
+
+      {auditLog.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+            <Clock className="w-3 h-3" /> Audit Log
+          </p>
+          <div className="border border-border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+            {auditLog.map((entry) => (
+              <div key={entry.id} className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 text-[11px] items-center border-b border-border/50 last:border-0">
+                <span className={`font-semibold ${entry.action === "grant" ? "text-bullish" : "text-bearish"}`}>
+                  {entry.action === "grant" ? "✓ Grant" : "✗ Terminate"}
+                </span>
+                <span className="truncate text-muted-foreground">
+                  {entry.target_email ?? "—"}
+                  {entry.action === "grant" && entry.plan ? ` · ${entry.plan}` : ""}
+                </span>
+                <span className="text-muted-foreground/70 whitespace-nowrap">
+                  {new Date(entry.performed_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
