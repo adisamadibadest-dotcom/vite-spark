@@ -48,8 +48,9 @@ args = "pnpm --filter @workspace/apexgold-mobile run dev"
 outputType = "console"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
+integrations = ["javascript_database:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
