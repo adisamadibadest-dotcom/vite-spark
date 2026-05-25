@@ -1,5 +1,5 @@
-// import { generateText } from "ai";          // re-enable with real AI
-// import { openai } from "@ai-sdk/openai";    // re-enable with real AI
+import { generateText } from "ai";
+import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
 import { mockAnalyzeChart, mockChat } from "./mock-analysis.js";
 
@@ -396,30 +396,36 @@ export async function handleAnalyzeChart(body: {
     }
 
     const mt = mimeType ?? "image/png";
-    // ── Real AI (re-enable when API billing is active) ──────────────────────
-    // let lastErr: unknown = null;
-    // for (let attempt = 0; attempt < 2; attempt++) {
-    //   try {
-    //     const { text } = await generateText({
-    //       model: openai("gpt-4o"),
-    //       temperature: 0.2,
-    //       system: ANALYZE_SYSTEM + riskInstruction(riskPreference),
-    //       messages: [{ role: "user", content: [
-    //         { type: "text", text: jsonInstruction() },
-    //         { type: "image", image: `data:${mt};base64,${imageBase64}` },
-    //       ]}],
-    //     });
-    //     const parsed = AnnotationSchema.parse(extractJsonObject(text));
-    //     return { status: 200, body: completeTradeSetup(parsed) };
-    //   } catch (e) {
-    //     lastErr = e;
-    //     if (/429|402/.test(String(e))) break;
-    //   }
-    // }
-    // throw lastErr ?? new Error("AI error");
-    // ────────────────────────────────────────────────────────────────────────
 
-    console.log(`[analyze-chart] using mock engine, imageLen=${imageBase64.length}`);
+    const groqKey = process.env.GROQ_API_KEY;
+    if (groqKey) {
+      console.log(`[analyze-chart] using Groq vision, imageLen=${imageBase64.length}`);
+      const groq = createGroq({ apiKey: groqKey });
+      let lastErr: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { text } = await generateText({
+            model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
+            temperature: 0.2,
+            system: ANALYZE_SYSTEM + riskInstruction(riskPreference),
+            messages: [{ role: "user", content: [
+              { type: "text", text: jsonInstruction() },
+              { type: "image", image: `data:${mt};base64,${imageBase64}` },
+            ]}],
+          });
+          console.log(`[analyze-chart] Groq returned ${text.length} chars`);
+          const parsed = AnnotationSchema.parse(extractJsonObject(text));
+          return { status: 200, body: completeTradeSetup(parsed) };
+        } catch (e) {
+          lastErr = e;
+          console.error(`[analyze-chart] Groq attempt ${attempt + 1} failed:`, e);
+          if (/429|402/.test(String(e))) break;
+        }
+      }
+      throw lastErr ?? new Error("Groq AI error");
+    }
+
+    console.log(`[analyze-chart] no GROQ_API_KEY — using mock engine`);
     const result = mockAnalyzeChart(imageBase64);
     console.log(`[analyze-chart] mock result bias=${result.bias} confidence=${result.confidence}`);
     return { status: 200, body: result };
