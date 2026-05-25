@@ -1,8 +1,14 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+
+function getGroq() {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error("GROQ_API_KEY is not set.");
+  return createGroq({ apiKey: key });
+}
 
 const router: IRouter = Router();
 
@@ -81,7 +87,7 @@ router.post("/chat", async (req: Request, res: Response) => {
     }
 
     const { text } = await generateText({
-      model: google("gemini-2.0-flash"),
+      model: getGroq()("llama-3.3-70b-versatile"),
       system: CHAT_SYSTEM_PROMPT,
       messages: [
         ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
@@ -324,9 +330,9 @@ router.post("/analyze-chart", async (req: Request, res: Response) => {
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        logger.info({ attempt }, "analyze-chart: calling Gemini gemini-2.0-flash");
+        logger.info({ attempt }, "analyze-chart: calling Groq llama-4-scout vision");
         const { text } = await generateText({
-          model: google("gemini-2.0-flash"),
+          model: getGroq()("meta-llama/llama-4-scout-17b-16e-instruct"),
           temperature: 0.2,
           system: ANALYZE_SYSTEM,
           messages: [
@@ -339,7 +345,7 @@ router.post("/analyze-chart", async (req: Request, res: Response) => {
             },
           ],
         });
-        logger.info({ textLen: text.length }, "analyze-chart: Gemini responded, parsing JSON");
+        logger.info({ textLen: text.length }, "analyze-chart: Groq responded, parsing JSON");
         const parsed = AnnotationSchema.parse(extractJsonObject(text));
         logger.info({ bias: parsed.bias, confidence: parsed.confidence }, "analyze-chart: success");
         res.json(completeTradeSetup(parsed));

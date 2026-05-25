@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@ai-sdk/groq':
+      specifier: ^3.0.39
+      version: 3.0.39
     '@replit/vite-plugin-cartographer':
       specifier: ^0.5.5
       version: 0.5.5
@@ -72,7 +75,7 @@ importers:
   .:
     dependencies:
       '@ai-sdk/groq':
-        specifier: ^3.0.39
+        specifier: 'catalog:'
         version: 3.0.39(zod@3.25.76)
       '@ai-sdk/openai':
         specifier: ^3.0.65
@@ -81,7 +84,7 @@ importers:
         specifier: ^2.106.0
         version: 2.106.1
       ai:
-        specifier: ^6.0.185
+        specifier: ^6.0.190
         version: 6.0.190(zod@3.25.76)
       cors:
         specifier: ^2.8.6
@@ -291,6 +294,30 @@ importers:
       wouter:
         specifier: ^3.3.5
         version: 3.9.0(react@19.1.0)
+
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_3148:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_3370:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_3446:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_3489:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
 
   artifacts/apexgold:
     devDependencies:
@@ -625,6 +652,9 @@ importers:
 
   artifacts/api-server:
     dependencies:
+      '@ai-sdk/groq':
+        specifier: ^3.0.39
+        version: 3.0.39(zod@3.25.76)
       '@supabase/supabase-js':
         specifier: ^2.106.0
         version: 2.106.1
@@ -634,6 +664,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      ai:
+        specifier: ^6.0.185
+        version: 6.0.190(zod@3.25.76)
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -6246,6 +6279,11 @@ packages:
   pngjs@3.4.0:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
     engines: {node: '>=4.0.0'}
+
+  pnpm@9.0.0:
+    resolution: {integrity: sha512-tBBnB8ciWxdIthWVlTzL6/+XtUrQXQAqo2NfYzucU81mb3zpuLxEcE8foEi5pJtVNxqy2enWZ9Hv4u8VFLzVEw==}
+    engines: {node: '>=18.12'}
+    hasBin: true
 
   postcss-selector-parser@6.0.10:
     resolution: {integrity: sha512-IQ7TZdoaqbT+LCpShg46jnZVlhWD2w6iQYAcYXfHARZ7X1t/UGhhceQDs5X0cGqKvYlHNOuv7Oa1xmb0oQuA3w==}
@@ -13431,6 +13469,8 @@ snapshots:
       xmlbuilder: 15.1.1
 
   pngjs@3.4.0: {}
+
+  pnpm@9.0.0: {}
 
   postcss-selector-parser@6.0.10:
     dependencies:
