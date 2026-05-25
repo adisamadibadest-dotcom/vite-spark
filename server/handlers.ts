@@ -363,12 +363,23 @@ function extractJsonObject(text: string): unknown {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+function riskInstruction(risk: string | undefined): string {
+  if (risk === "conservative") {
+    return "\nRISK PROFILE — Conservative: Use tighter stop-losses (smaller ATR multiple), target TP1 as the primary objective, keep riskReward modest (1:1.2–1:1.8). Prioritise capital preservation.";
+  }
+  if (risk === "aggressive") {
+    return "\nRISK PROFILE — Aggressive: Use wider measured moves, push toward TP2/TP3 as primary objectives, allow riskReward of 1:3+ when structure supports it.";
+  }
+  return "\nRISK PROFILE — Moderate: Standard risk-reward, target TP1–TP2 balanced approach (1:1.5–1:2.5).";
+}
+
 export async function handleAnalyzeChart(body: {
   imageBase64?: string;
   mimeType?: string;
+  riskPreference?: string;
 }): Promise<{ status: number; body: unknown }> {
   try {
-    const { imageBase64, mimeType } = body;
+    const { imageBase64, mimeType, riskPreference } = body;
 
     if (!imageBase64) {
       console.error("[analyze-chart] imageBase64 missing from body");
@@ -392,7 +403,7 @@ export async function handleAnalyzeChart(body: {
     //     const { text } = await generateText({
     //       model: openai("gpt-4o"),
     //       temperature: 0.2,
-    //       system: ANALYZE_SYSTEM,
+    //       system: ANALYZE_SYSTEM + riskInstruction(riskPreference),
     //       messages: [{ role: "user", content: [
     //         { type: "text", text: jsonInstruction() },
     //         { type: "image", image: `data:${mt};base64,${imageBase64}` },

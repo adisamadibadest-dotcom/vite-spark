@@ -11,7 +11,11 @@ import { useAccess } from "@/hooks/use-access";
 import { supabase } from "@/integrations/supabase/client";
 import { MyTradesSection } from "@/components/MyTradesSection";
 import { AlertsWatchlistSection } from "@/components/AlertsWatchlistSection";
+import { UserSettingsSheet } from "@/components/UserSettingsSheet";
 import { fetchGoldPrice } from "@/lib/gold-price";
+import { useTheme } from "@/hooks/use-theme";
+import { useRiskPreference } from "@/hooks/use-risk-preference";
+import { useScreenshotHistory, generateThumbnail, detectPair } from "@/hooks/use-screenshot-history";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -94,6 +98,7 @@ async function fileToCompressedDataUrl(file: File): Promise<{ url: string; base6
 }
 
 export function ApexDashboard() {
+  useTheme();
   const [tradesRefresh, setTradesRefresh] = useState(0);
   const [price, setPrice] = useState<number | null>(null);
   const [prev, setPrev] = useState<number | null>(null);
@@ -190,33 +195,37 @@ function Header() {
 
 function ProfileMenu() {
   const { user, signOut } = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const initial = (user?.email ?? "?").charAt(0).toUpperCase();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="w-8 h-8 rounded-full bg-gradient-gold flex items-center justify-center text-primary-foreground font-bold text-xs shadow-gold focus:outline-none focus:ring-2 focus:ring-primary/40"
-          aria-label="Account menu"
-        >
-          {initial}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed in as</span>
-            <span className="text-sm font-medium truncate">{user?.email}</span>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled className="opacity-70">
-          <UserIcon className="w-4 h-4 mr-2" /> Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => signOut()} className="text-destructive focus:text-destructive">
-          <LogOut className="w-4 h-4 mr-2" /> Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="w-8 h-8 rounded-full bg-gradient-gold flex items-center justify-center text-primary-foreground font-bold text-xs shadow-gold focus:outline-none focus:ring-2 focus:ring-primary/40"
+            aria-label="Account menu"
+          >
+            {initial}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed in as</span>
+              <span className="text-sm font-medium truncate">{user?.email}</span>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+            <UserIcon className="w-4 h-4 mr-2" /> Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => signOut()} className="text-destructive focus:text-destructive">
+            <LogOut className="w-4 h-4 mr-2" /> Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <UserSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 }
 
@@ -923,6 +932,8 @@ function ChatCard() {
 function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
   const { user } = useAuth();
   const { unlimited, isAdmin, subscription, loading: accessLoading } = useAccess();
+  const { risk } = useRiskPreference(user?.id);
+  const { addEntry } = useScreenshotHistory(user?.id);
   const [file, setFile] = useState<{ url: string; base64: string; mime: string; compressedKB: number; wasResized: boolean } | null>(null);
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -984,7 +995,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
       const res = await fetch("/api/analyze-chart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: file.base64, mimeType: file.mime }),
+        body: JSON.stringify({ imageBase64: file.base64, mimeType: file.mime, riskPreference: risk }),
         signal: controller.signal,
       });
       if (!res.ok) {
@@ -1005,6 +1016,27 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
       }
       const data = (await res.json()) as Annotation;
       setResult(data);
+      if (file?.url) {
+        generateThumbnail(file.url).then((thumbnailUrl) => {
+          addEntry({
+            thumbnailUrl,
+            pair: detectPair(data.summary + " " + (data.reasoning?.structure ?? "")),
+            bias: data.bias,
+            confidence: data.confidence,
+            summary: data.summary,
+            reasoning: data.reasoning,
+            setup: data.setup ? {
+              valid: data.setup.valid,
+              direction: data.setup.direction,
+              entry: data.setup.entry,
+              stopLoss: data.setup.stopLoss,
+              takeProfits: data.setup.takeProfits,
+              riskReward: data.setup.riskReward,
+              rationale: data.setup.rationale,
+            } : undefined,
+          });
+        }).catch(() => {});
+      }
       if (!unlimited) {
         const next = usage + 1;
         setUsage(next);

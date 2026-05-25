@@ -1,2 +1,5 @@
 packages:
   - artifacts/apexgold-mobile
+
+onlyBuiltDependencies:
+  - '@pnpm/exe'
