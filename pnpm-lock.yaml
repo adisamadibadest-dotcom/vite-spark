@@ -247,6 +247,18 @@ importers:
         specifier: 9.0.0
         version: 9.0.0
 
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_759:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_832:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
   artifacts/apexgold-mobile:
     dependencies:
       '@supabase/supabase-js':
