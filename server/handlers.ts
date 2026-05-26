@@ -1,7 +1,6 @@
 import { generateText } from "ai";
 import { createGroq } from "@ai-sdk/groq";
 import { z } from "zod";
-import { mockAnalyzeChart, mockChat } from "./mock-analysis.js";
 
 type GoldQuote = { price: number; source: string; fetchedAt: number; high24h?: number; low24h?: number; volume?: number };
 
@@ -97,19 +96,17 @@ export async function handleChat(body: { message?: string; history?: { role: "us
     const { message } = body;
     if (!message?.trim()) return { status: 400, body: { error: "message required" } };
 
-    // ── Real AI (re-enable when API billing is active) ──────────────────────
-    // const { text } = await generateText({
-    //   model: openai("gpt-4o-mini"),
-    //   system: CHAT_SYSTEM_PROMPT,
-    //   messages: [
-    //     ...(history ?? []).slice(-8).map((m) => ({ role: m.role, content: m.content })),
-    //     { role: "user" as const, content: message },
-    //   ],
-    // });
-    // return { status: 200, body: { text } };
-    // ────────────────────────────────────────────────────────────────────────
-
-    const text = mockChat(message);
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) throw new Error("GROQ_API_KEY not configured");
+    const groq = createGroq({ apiKey: groqKey });
+    const { text } = await generateText({
+      model: groq("llama-3.3-70b-versatile"),
+      system: CHAT_SYSTEM_PROMPT,
+      messages: [
+        ...(body.history ?? []).slice(-8).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        { role: "user" as const, content: message },
+      ],
+    });
     return { status: 200, body: { text } };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
@@ -425,10 +422,7 @@ export async function handleAnalyzeChart(body: {
       throw lastErr ?? new Error("Groq AI error");
     }
 
-    console.log(`[analyze-chart] no GROQ_API_KEY — using mock engine`);
-    const result = mockAnalyzeChart(imageBase64);
-    console.log(`[analyze-chart] mock result bias=${result.bias} confidence=${result.confidence}`);
-    return { status: 200, body: result };
+    throw new Error("GROQ_API_KEY not configured");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
     const status = /429/.test(msg) ? 429 : /402/.test(msg) ? 402 : 500;
