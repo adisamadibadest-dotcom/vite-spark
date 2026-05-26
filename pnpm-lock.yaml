@@ -235,6 +235,12 @@ importers:
         specifier: 9.0.0
         version: 9.0.0
 
+  .local/share/pnpm/.tools/pnpm/9.0.0_tmp_235:
+    dependencies:
+      pnpm:
+        specifier: 9.0.0
+        version: 9.0.0
+
   .local/share/pnpm/.tools/pnpm/9.0.0_tmp_2677:
     dependencies:
       pnpm:
