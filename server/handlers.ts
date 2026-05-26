@@ -422,7 +422,7 @@ export async function handleAnalyzeChart(body: {
       throw lastErr ?? new Error("Groq AI error");
     }
 
-    throw new Error("GROQ_API_KEY not configured");
+    throw new Error("AI service is not configured. Please add your GROQ_API_KEY to the deployment environment.");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "AI error";
     const status = /429/.test(msg) ? 429 : /402/.test(msg) ? 402 : 500;
