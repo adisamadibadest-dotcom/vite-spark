@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, Activity, TrendingUp, TrendingDown, Minus, Upload, Send, Sparkles,
-  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Clock, Target,
+  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Target,
   ShieldCheck, Zap, Loader2, Check, AlertTriangle, Layers, Droplet, GitBranch, BarChart3, Mail, LogOut, User as UserIcon, Save,
-  RefreshCw, WifiOff, Server, Star, ChevronRight,
+  RefreshCw, WifiOff, Server, ChevronRight,
 } from "lucide-react";
 import { MpesaPaymentModal, PACKAGES } from "@/components/MpesaPaymentModal";
 import { toast } from "sonner";
@@ -1641,17 +1641,11 @@ async function getAuthToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-type AuditEntry = { id: number; action: string; target_email?: string; plan?: string; days?: number; expires_at?: string; performed_at: string };
-
 function AdminPanel() {
   const { isAdmin, loading } = useAccess();
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("1 Month Access");
-  const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [subs, setSubs] = useState<Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>>([]);
-  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   const loadSubs = async () => {
     const token = await getAuthToken();
@@ -1660,49 +1654,15 @@ function AdminPanel() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return;
-    const data = await res.json() as Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>;
-    setSubs(data);
+    setSubs(await res.json() as Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>);
   };
 
-  const loadAuditLog = async () => {
-    const token = await getAuthToken();
-    if (!token) return;
-    const res = await fetch("/api/admin/audit-log", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-    setAuditLog(await res.json() as AuditEntry[]);
-  };
-
-  useEffect(() => { if (isAdmin) { loadSubs(); loadAuditLog(); } }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { loadSubs(); } }, [isAdmin]);
 
   if (loading || !isAdmin) return null;
 
-  const grant = async () => {
-    setBusy(true); setMsg(null);
-    try {
-      const token = await getAuthToken();
-      if (!token) throw new Error("Not authenticated.");
-      const res = await fetch("/api/admin/grant-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), plan, days }),
-      });
-      const json = await res.json() as { ok?: boolean; expires?: string; error?: string };
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to grant subscription.");
-      const expires = json.expires!;
-      setMsg({ tone: "ok", text: `Granted ${plan} until ${new Date(expires).toLocaleDateString()}.` });
-      setEmail("");
-      await loadSubs();
-    } catch (e) {
-      setMsg({ tone: "err", text: e instanceof Error ? e.message : "Failed to grant subscription." });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const terminate = async (id: string, userEmail?: string) => {
-    setBusy(true);
+    setBusy(true); setMsg(null);
     try {
       const token = await getAuthToken();
       if (!token) throw new Error("Not authenticated.");
@@ -1714,7 +1674,7 @@ function AdminPanel() {
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to terminate.");
       setMsg({ tone: "ok", text: "Subscription terminated." });
-      await Promise.all([loadSubs(), loadAuditLog()]);
+      await loadSubs();
     } catch (e) {
       setMsg({ tone: "err", text: e instanceof Error ? e.message : "Failed to terminate." });
     } finally {
@@ -1726,31 +1686,7 @@ function AdminPanel() {
     <section className="rounded-2xl bg-gradient-card border border-gold/40 p-4 sm:p-5 animate-fade-up">
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="w-4 h-4 text-gold" />
-        <h3 className="text-sm font-semibold">Admin · Subscriptions</h3>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
-        <input
-          type="email" placeholder="user@email.com" value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="sm:col-span-2 bg-card border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-gold/60"
-        />
-        <select
-          value={plan} onChange={(e) => {
-            const v = e.target.value; setPlan(v); setDays(v.startsWith("2 Weeks") ? 14 : 30);
-          }}
-          className="bg-card border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-gold/60"
-        >
-          <option>2 Weeks Access</option>
-          <option>1 Month Access</option>
-        </select>
-        <button
-          type="button" disabled={busy || !email}
-          onClick={grant}
-          className="bg-gradient-gold text-primary-foreground font-semibold rounded-lg text-xs disabled:opacity-50 px-3 py-2"
-        >
-          {busy ? "Working…" : "Grant"}
-        </button>
+        <h3 className="text-sm font-semibold">Admin · Active Subscriptions</h3>
       </div>
 
       {msg && (
@@ -1776,39 +1712,15 @@ function AdminPanel() {
               {!expired ? (
                 <button onClick={() => terminate(s.id, s.email)} disabled={busy}
                   className="text-[10px] px-2 py-1 rounded border border-bearish/40 text-bearish hover:bg-bearish/10">
-                  Terminate
+                  Revoke
                 </button>
               ) : (
-                <span className="text-[10px] text-muted-foreground">{s.status === "terminated" ? "Terminated" : "Expired"}</span>
+                <span className="text-[10px] text-muted-foreground">{s.status === "terminated" ? "Revoked" : "Expired"}</span>
               )}
             </div>
           );
         })}
       </div>
-
-      {auditLog.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-            <Clock className="w-3 h-3" /> Audit Log
-          </p>
-          <div className="border border-border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
-            {auditLog.map((entry) => (
-              <div key={entry.id} className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 text-[11px] items-center border-b border-border/50 last:border-0">
-                <span className={`font-semibold ${entry.action === "grant" ? "text-bullish" : "text-bearish"}`}>
-                  {entry.action === "grant" ? "✓ Grant" : "✗ Terminate"}
-                </span>
-                <span className="truncate text-muted-foreground">
-                  {entry.target_email ?? "—"}
-                  {entry.action === "grant" && entry.plan ? ` · ${entry.plan}` : ""}
-                </span>
-                <span className="text-muted-foreground/70 whitespace-nowrap">
-                  {new Date(entry.performed_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </section>
   );
 }

@@ -107,4 +107,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 MPESA_ENV = "production"
-MPESA_CALLBACK_URL = "https://apexgold-ai.replit.app/api/mpesa/callback"
+MPESA_CALLBACK_URL = "https://apexgoldai.online/api/mpesa/callback"
