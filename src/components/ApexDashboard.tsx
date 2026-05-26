@@ -3,8 +3,9 @@ import {
   Brain, Activity, TrendingUp, TrendingDown, Minus, Upload, Send, Sparkles,
   ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Clock, Target,
   ShieldCheck, Zap, Loader2, Check, AlertTriangle, Layers, Droplet, GitBranch, BarChart3, Mail, LogOut, User as UserIcon, Save,
-  RefreshCw, WifiOff, Server,
+  RefreshCw, WifiOff, Server, Star, ChevronRight,
 } from "lucide-react";
+import { MpesaPaymentModal, PACKAGES } from "@/components/MpesaPaymentModal";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccess } from "@/hooks/use-access";
@@ -1530,84 +1531,107 @@ function SetupTile({ label, value, accent, icon: Icon }: { label: string; value:
 
 /* ---------------- Premium ---------------- */
 function PremiumSection() {
-  const plans = [
-    { id: "2-weeks", name: "2 Weeks Access", price: 13, period: "14 days" },
-    { id: "1-month", name: "1 Month Access", price: 20, period: "30 days" },
-  ];
-  const [selected, setSelected] = useState<string>("1-month");
-  const features = [
-    "Advanced AI analysis", "Unlimited chart analysis", "Priority screenshot review",
-    "Premium gold trade setups", "Multi-timeframe bias", "Confidence scoring",
-    "Exclusive gold trading insights",
-  ];
-  const selectedPlan = plans.find((p) => p.id === selected) ?? plans[0];
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    `Hello ApexGold AI Team, I would like to subscribe to the ${selectedPlan.name} ($${selectedPlan.price} / ${selectedPlan.period}). Please guide me through the payment and activation.`
-  )}`;
+  const { hasActiveSubscription, isAdmin } = useAccess();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPackageId, setSelectedPackageId] = useState("1-month");
+  const [kesRate, setKesRate] = useState(130);
+
+  useEffect(() => {
+    fetch("/api/exchange-rate/usd-kes")
+      .then((r) => r.json())
+      .then((d: { rate?: number }) => { if (d.rate && d.rate > 50) setKesRate(d.rate); })
+      .catch(() => {});
+  }, []);
+
+  if (isAdmin || hasActiveSubscription) return null;
+
   return (
-    <section className="rounded-2xl bg-gradient-card border border-gold/30 p-4 sm:p-5 animate-fade-up relative overflow-hidden">
-      <div className="absolute inset-0 opacity-30 pointer-events-none"
-        style={{ background: "radial-gradient(ellipse 60% 80% at 50% 0%, color-mix(in oklab, var(--gold) 30%, transparent), transparent)" }} />
-      <div className="relative">
-        <div className="flex items-center gap-2 mb-1">
-          <Crown className="w-4 h-4 text-gold" />
-          <h3 className="text-sm font-semibold">Premium Membership</h3>
-        </div>
-        <p className="text-[11px] text-muted-foreground mb-3">Unlock the full institutional-grade ApexGold AI experience.</p>
+    <>
+      <section className="rounded-2xl bg-gradient-card border border-gold/30 animate-fade-up relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-25 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse 70% 80% at 50% 0%, color-mix(in oklab, var(--gold) 35%, transparent), transparent)" }}
+        />
 
-        <div role="radiogroup" aria-label="Subscription plan" className="grid grid-cols-2 gap-2 mb-3">
-          {plans.map((p) => {
-            const active = selected === p.id;
-            return (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={active}
-                key={p.id}
-                onClick={() => setSelected(p.id)}
-                className={`rounded-xl border p-3 text-center relative transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
-                  active
-                    ? "border-gold bg-gold/10 shadow-[0_0_24px_-8px_var(--gold)]"
-                    : "border-border bg-card/40 hover:border-gold/40"
-                }`}
-              >
-                {active && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-gradient-gold text-primary-foreground px-2 py-0.5 rounded-full">
-                    SELECTED
-                  </span>
-                )}
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{p.name}</div>
-                <div className="text-2xl font-black text-gradient-gold mt-1 tabular-nums">${p.price}</div>
-                <div className="text-[10px] text-muted-foreground">for {p.period}</div>
-              </button>
-            );
-          })}
-        </div>
+        {/* CTA Bar */}
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className="relative w-full flex items-center gap-3 px-4 sm:px-5 py-4 group text-left"
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-gold flex items-center justify-center shadow-gold shrink-0">
+            <Crown className="w-4.5 h-4.5 text-primary-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gradient-gold leading-tight">Go Premium</p>
+            <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+              Advanced AI chart analysis, premium trade signals, screenshot history, personalised risk settings, and future premium trading tools.
+            </p>
+          </div>
+          <div className="shrink-0 flex items-center gap-1.5">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold bg-gradient-gold text-primary-foreground px-2.5 py-1 rounded-full shadow-gold group-hover:opacity-90 transition-opacity">
+              <Zap className="w-3 h-3" /> Upgrade
+            </span>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-gold transition-colors" />
+          </div>
+        </button>
 
-        <ul className="space-y-1.5 mb-4">
-          {features.map((f) => (
-            <li key={f} className="flex items-center gap-2 text-xs">
-              <span className="w-4 h-4 rounded-full bg-gold/15 flex items-center justify-center shrink-0">
-                <Check className="w-2.5 h-2.5 text-gold" />
+        {/* Packages */}
+        <div className="relative px-4 sm:px-5 pb-4 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            {PACKAGES.map((pkg) => {
+              const kes = Math.ceil(pkg.usd * kesRate);
+              const active = selectedPackageId === pkg.id;
+              const isPopular = pkg.id === "1-month";
+              return (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  onClick={() => setSelectedPackageId(pkg.id)}
+                  className={`relative rounded-xl border p-2.5 text-center transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
+                    active
+                      ? "border-gold bg-gold/10 shadow-[0_0_20px_-8px_var(--gold)]"
+                      : "border-border bg-card/40 hover:border-gold/40"
+                  }`}
+                >
+                  {isPopular && (
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-bold bg-gradient-gold text-primary-foreground px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                      BEST VALUE
+                    </span>
+                  )}
+                  <div className={`text-lg font-black tabular-nums ${active ? "text-gradient-gold" : ""}`}>${pkg.usd}</div>
+                  <div className="text-[9px] text-muted-foreground font-medium">{pkg.label}</div>
+                  <div className="text-[9px] text-muted-foreground/70 mt-0.5">≈ KES {kes.toLocaleString()}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="w-full bg-gradient-gold text-primary-foreground font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-gold hover:opacity-90 transition-opacity active:scale-[0.98]"
+          >
+            <Crown className="w-4 h-4" />
+            Pay with M-Pesa — ${PACKAGES.find((p) => p.id === selectedPackageId)?.usd}
+          </button>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            {["Unlimited AI analysis", "Advanced signals", "No cooldown", "Auto-activation"].map((f) => (
+              <span key={f} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Check className="w-3 h-3 text-gold" />{f}
               </span>
-              {f}
-            </li>
-          ))}
-        </ul>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <a href={whatsappUrl} target="_blank" rel="noreferrer"
-             className="bg-gradient-gold text-primary-foreground font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-gold hover:opacity-90 transition-opacity">
-            <Crown className="w-4 h-4" /> Subscribe — ${selectedPlan.price}
-          </a>
-          <a href={whatsappUrl} target="_blank" rel="noreferrer"
-             className="border border-border bg-card/60 hover:border-gold/50 hover:bg-card font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
-            <MessageCircle className="w-4 h-4 text-bullish" /> Contact on WhatsApp
-          </a>
+            ))}
+          </div>
         </div>
-        <p className="text-[10px] text-muted-foreground text-center mt-2">Contact the team: <a className="text-gold hover:underline" href={`mailto:${ADMIN_EMAIL}`}>{ADMIN_EMAIL}</a></p>
-      </div>
-    </section>
+      </section>
+
+      <MpesaPaymentModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialPackageId={selectedPackageId}
+      />
+    </>
   );
 }
 

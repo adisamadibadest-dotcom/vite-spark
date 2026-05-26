@@ -1,17 +1,12 @@
 import { useState } from "react";
-import { Monitor, Moon, Sun, TrendingDown, TrendingUp, Zap, Trash2, ExternalLink, Crown, ShieldCheck, Star, ChevronRight, ImageOff } from "lucide-react";
+import { Monitor, Moon, Sun, TrendingDown, TrendingUp, Zap, Trash2, ExternalLink, Crown, ShieldCheck, Star, ChevronRight, ImageOff, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useTheme, type Theme } from "@/hooks/use-theme";
 import { useRiskPreference, type RiskPreference } from "@/hooks/use-risk-preference";
 import { useScreenshotHistory, type ScreenshotEntry } from "@/hooks/use-screenshot-history";
 import { useAccess } from "@/hooks/use-access";
 import { useAuth } from "@/hooks/use-auth";
-
-const WHATSAPP_NUMBER = "254799415761";
-const WHATSAPP_MSG = encodeURIComponent(
-  "Hello ApexGold AI Team, I would like to subscribe to the premium membership plan. Please guide me through the payment and activation process."
-);
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
+import { MpesaPaymentModal } from "@/components/MpesaPaymentModal";
 
 type Section = "theme" | "risk" | "history" | "subscription";
 
@@ -29,6 +24,7 @@ export function UserSettingsSheet({ open, onOpenChange, onOpenEntry }: UserSetti
   const { history, deleteEntry, clearAll } = useScreenshotHistory(user?.id);
   const [activeSection, setActiveSection] = useState<Section>("subscription");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [payModalOpen, setPayModalOpen] = useState(false);
 
   const planLabel = isAdmin ? "Admin" : hasActiveSubscription ? "Premium" : "Free";
   const planIcon = isAdmin
@@ -40,6 +36,8 @@ export function UserSettingsSheet({ open, onOpenChange, onOpenEntry }: UserSetti
   const daysRemaining = subscription?.expires_at
     ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / 86400000))
     : null;
+
+  const isExpired = hasActiveSubscription && daysRemaining !== null && daysRemaining === 0;
 
   const sections: { id: Section; label: string; count?: number }[] = [
     { id: "subscription", label: "Subscription" },
@@ -79,8 +77,9 @@ export function UserSettingsSheet({ open, onOpenChange, onOpenEntry }: UserSetti
 
           {activeSection === "subscription" && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between mb-3">
+              {/* Plan badge */}
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Current Plan</span>
                   <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
                     isAdmin
@@ -93,63 +92,90 @@ export function UserSettingsSheet({ open, onOpenChange, onOpenEntry }: UserSetti
                   </span>
                 </div>
 
+                {/* Admin */}
                 {isAdmin && (
-                  <p className="text-sm text-muted-foreground">Full admin access — no expiry.</p>
-                )}
-
-                {!isAdmin && hasActiveSubscription && subscription && (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Plan</span>
-                      <span className="font-medium">{subscription.plan}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status</span>
-                      <span className="text-bullish font-medium capitalize">{subscription.status}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Expires</span>
-                      <span className="font-medium">{new Date(subscription.expires_at).toLocaleDateString()}</span>
-                    </div>
-                    {daysRemaining !== null && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Days Remaining</span>
-                        <span className={`font-semibold ${daysRemaining <= 3 ? "text-bearish" : daysRemaining <= 7 ? "text-gold" : "text-bullish"}`}>
-                          {daysRemaining} {daysRemaining === 1 ? "day" : "days"}
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2 rounded-lg bg-gold/5 border border-gold/20 px-3 py-2">
+                    <ShieldCheck className="w-4 h-4 text-gold shrink-0" />
+                    <p className="text-xs text-gold font-medium">Full admin access — no expiry.</p>
                   </div>
                 )}
 
+                {/* Active Premium */}
+                {!isAdmin && hasActiveSubscription && subscription && (
+                  <>
+                    <div className="flex items-center gap-2 rounded-lg bg-bullish/5 border border-bullish/20 px-3 py-2">
+                      <CheckCircle2 className="w-4 h-4 text-bullish shrink-0" />
+                      <p className="text-xs text-bullish font-medium">Premium Active — Unlimited AI analysis</p>
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { label: "Package", value: subscription.plan },
+                        { label: "Status", value: "Active", color: "text-bullish" },
+                        { label: "Started", value: new Date(subscription.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) },
+                        { label: "Expires", value: new Date(subscription.expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">{label}</span>
+                          <span className={`font-medium ${color ?? ""}`}>{value}</span>
+                        </div>
+                      ))}
+                      {daysRemaining !== null && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Days Remaining</span>
+                          <span className={`font-bold ${daysRemaining <= 3 ? "text-bearish" : daysRemaining <= 7 ? "text-gold" : "text-bullish"}`}>
+                            {daysRemaining} {daysRemaining === 1 ? "day" : "days"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {daysRemaining !== null && daysRemaining <= 3 && (
+                      <div className="flex items-start gap-2 rounded-lg bg-gold/5 border border-gold/30 px-3 py-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-gold">Your plan expires soon. Renew to keep your premium access.</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Free tier */}
                 {!isAdmin && !hasActiveSubscription && (
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      You're on the <strong>Free tier</strong> — limited to 5 trial analyses with 60-second cooldowns.
-                    </p>
-                    <a
-                      href={WHATSAPP_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold to-amber-500 text-primary-foreground font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition-opacity"
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/60 border border-border px-3 py-2">
+                      <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <p className="text-xs text-muted-foreground">Free tier — limited to 5 trial analyses with 60-second cooldowns.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPayModalOpen(true)}
+                      className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-gold to-amber-500 text-primary-foreground font-semibold rounded-xl py-2.5 text-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                     >
-                      <Crown className="w-4 h-4" /> Upgrade to Premium
-                    </a>
+                      <Crown className="w-4 h-4" /> Upgrade with M-Pesa
+                    </button>
                     <p className="text-[10px] text-muted-foreground text-center">
-                      Premium unlocks unlimited analyses, no cooldown, and priority AI processing.
+                      Pay instantly via M-Pesa STK Push — activates automatically.
                     </p>
                   </div>
                 )}
               </div>
 
+              {/* Premium perks banner */}
               {hasActiveSubscription && (
-                <div className="rounded-xl border border-bullish/20 bg-bullish/5 p-3 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-bullish shrink-0" />
-                  <p className="text-xs text-bullish">Unlimited analyses, no cooldown, priority AI processing.</p>
+                <div className="rounded-xl border border-bullish/20 bg-bullish/5 p-3 space-y-1.5">
+                  {["Unlimited AI chart analyses", "No analysis cooldown", "Priority AI processing", "Advanced trade setups", "Screenshot history"].map((f) => (
+                    <div key={f} className="flex items-center gap-2 text-xs text-bullish">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />{f}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
+
+          {/* M-Pesa Payment Modal inside settings */}
+          <MpesaPaymentModal
+            open={payModalOpen}
+            onClose={() => setPayModalOpen(false)}
+          />
 
           {activeSection === "theme" && (
             <div className="space-y-3">
