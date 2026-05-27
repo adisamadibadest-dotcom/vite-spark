@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, Activity, TrendingUp, TrendingDown, Minus, Upload, Send, Sparkles,
-  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Target,
+  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Clock, Target,
   ShieldCheck, Zap, Loader2, Check, AlertTriangle, Layers, Droplet, GitBranch, BarChart3, Mail, LogOut, User as UserIcon, Save,
   RefreshCw, WifiOff, Server, ChevronRight,
 } from "lucide-react";
