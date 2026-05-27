@@ -26,23 +26,36 @@ export function useAccess() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: roles }, { data: repairedAdminRole }, { data: subs }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", user.id),
-        (supabase.rpc as unknown as (fn: string) => Promise<{ data: boolean | null }>)("ensure_admin_role"),
-        supabase
-          .from("subscriptions")
-          .select("id, plan, status, starts_at, expires_at")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .gt("expires_at", new Date().toISOString())
-          .order("expires_at", { ascending: false })
-          .limit(1),
-      ]);
-      if (cancelled) return;
-      const emailAdmin = user.email?.toLowerCase() === ADMIN_EMAIL;
-      setIsAdmin(emailAdmin || repairedAdminRole === true || (roles ?? []).some((r) => r.role === "admin"));
-      setSubscription((subs?.[0] as Subscription | undefined) ?? null);
-      setLoading(false);
+      try {
+        const [rolesResult, rpcResult, subsResult] = await Promise.allSettled([
+          supabase.from("user_roles").select("role").eq("user_id", user.id),
+          supabase.rpc("ensure_admin_role"),
+          supabase
+            .from("subscriptions")
+            .select("id, plan, status, starts_at, expires_at")
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .gt("expires_at", new Date().toISOString())
+            .order("expires_at", { ascending: false })
+            .limit(1),
+        ]);
+        if (cancelled) return;
+
+        const roles = rolesResult.status === "fulfilled" ? (rolesResult.value.data ?? []) : [];
+        const repairedAdminRole = rpcResult.status === "fulfilled" ? rpcResult.value.data : null;
+        const subs = subsResult.status === "fulfilled" ? (subsResult.value.data ?? []) : [];
+
+        const emailAdmin = user.email?.toLowerCase() === ADMIN_EMAIL;
+        setIsAdmin(emailAdmin || repairedAdminRole === true || (roles as Array<{ role: string }>).some((r) => r.role === "admin"));
+        setSubscription((subs as Subscription[])[0] ?? null);
+      } catch {
+        if (cancelled) return;
+        const emailAdmin = user.email?.toLowerCase() === ADMIN_EMAIL;
+        setIsAdmin(emailAdmin);
+        setSubscription(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [user, authLoading, refreshIdx]);
