@@ -1543,7 +1543,7 @@ function PremiumSection() {
       .catch(() => {});
   }, []);
 
-  if (isAdmin || hasActiveSubscription) return null;
+  if (hasActiveSubscription) return null;
 
   return (
     <>

@@ -138,7 +138,7 @@ export function UserSettingsSheet({ open, onOpenChange, onOpenEntry }: UserSetti
                 )}
 
                 {/* Free tier */}
-                {!isAdmin && !hasActiveSubscription && (
+                {!hasActiveSubscription && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 rounded-lg bg-muted/60 border border-border px-3 py-2">
                       <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
