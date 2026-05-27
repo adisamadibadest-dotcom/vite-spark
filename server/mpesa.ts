@@ -1,10 +1,7 @@
 import type { Request, Response, Express } from "express";
 import pkg from "pg";
-import { createClient } from "@supabase/supabase-js";
 
 const { Pool } = pkg;
-
-const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 
 let _pool: InstanceType<typeof Pool> | null = null;
 function getPool() {
@@ -16,15 +13,6 @@ function getPool() {
       max: 5,
     });
   return _pool;
-}
-
-function getAdminClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  return createClient(url, key, {
-    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-  });
 }
 
 async function ensureTransactionsTable() {
@@ -52,7 +40,7 @@ async function ensureTransactionsTable() {
 }
 
 function getMpesaEnv() {
-  const env = (process.env.MPESA_ENV ?? "production").toLowerCase();
+  const env = (process.env.MPESA_ENV ?? "sandbox").toLowerCase();
   if (env === "sandbox") {
     return {
       baseUrl: "https://sandbox.safaricom.co.ke",
@@ -161,31 +149,6 @@ async function initiateSTKPush(opts: {
     merchantRequestId: data.MerchantRequestID!,
     checkoutRequestId: data.CheckoutRequestID!,
   };
-}
-
-async function activateSubscription(transactionId: string, userId: string, userEmail: string, packageName: string, days: number) {
-  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-  const admin = getAdminClient();
-
-  const { data: prof } = await admin
-    .from("profiles")
-    .select("id")
-    .ilike("email", userEmail)
-    .maybeSingle();
-
-  if (!prof) {
-    console.error(`[mpesa] No profile found for email: ${userEmail}`);
-    return;
-  }
-
-  await admin.from("subscriptions").insert({
-    user_id: prof.id,
-    plan: packageName,
-    status: "active",
-    expires_at: expiresAt,
-  });
-
-  console.log(`[mpesa] ✓ Subscription activated for ${userEmail} → ${packageName} until ${expiresAt}`);
 }
 
 const PACKAGES: Record<string, { name: string; usd: number; days: number }> = {
@@ -303,8 +266,7 @@ export function registerMpesaRoutes(app: Express) {
       }
 
       const tx = txResult.rows[0] as { id: string; user_id: string; user_email: string; package_name: string; days: number };
-      await activateSubscription(tx.id, tx.user_id, tx.user_email, tx.package_name, tx.days);
-      console.log(`[mpesa/callback] ✓ Payment complete: receipt=${receipt} user=${tx.user_email}`);
+      console.log(`[mpesa/callback] ✓ Payment complete: receipt=${receipt} user=${tx.user_email} plan=${tx.package_name}`);
     } catch (e) {
       console.error("[mpesa/callback] Error processing callback:", e);
     }
@@ -329,14 +291,40 @@ export function registerMpesaRoutes(app: Express) {
     }
   });
 
+  app.get("/api/mpesa/subscription", async (req: Request, res: Response) => {
+    const userId = req.query.userId as string | undefined;
+    if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+
+    try {
+      await ensureTransactionsTable();
+      const result = await getPool().query(
+        `SELECT id, package_name AS plan, 'active' AS status, activated_at AS starts_at, expires_at
+         FROM mpesa_transactions
+         WHERE user_id=$1
+           AND status='completed'
+           AND expires_at > now()
+         ORDER BY expires_at DESC
+         LIMIT 1`,
+        [userId]
+      );
+      if (result.rowCount === 0) {
+        res.json({ subscription: null });
+        return;
+      }
+      res.json({ subscription: result.rows[0] });
+    } catch (e) {
+      console.error("[mpesa/subscription]", e);
+      res.status(500).json({ error: "Failed to fetch subscription." });
+    }
+  });
+
   app.get("/api/mpesa/config", (_req: Request, res: Response) => {
     const configured = !!(
       process.env.MPESA_CONSUMER_KEY &&
-      process.env.MPESA_CONSUMER_SECRET &&
-      process.env.MPESA_PASSKEY &&
-      process.env.MPESA_SHORTCODE
+      process.env.MPESA_CONSUMER_SECRET
     );
-    res.json({ configured, env: process.env.MPESA_ENV ?? "production" });
+    const env = process.env.MPESA_ENV ?? "sandbox";
+    res.json({ configured, env });
   });
 
   app.get("/api/exchange-rate/usd-kes", async (_req: Request, res: Response) => {
