@@ -115,12 +115,12 @@ export function MpesaPaymentModal({ open, onClose, initialPackageId }: Props) {
   function startPolling(crid: string) {
     stopPolling();
     let attempts = 0;
-    const MAX = 60;
+    const MAX = 22;
     pollRef.current = setInterval(async () => {
       attempts++;
       if (attempts > MAX) {
         stopPolling();
-        setErrorMsg("Payment timed out. If you paid, your premium will activate shortly.");
+        setErrorMsg("No confirmation received yet. If you completed the M-Pesa payment, your premium will activate within a few minutes — close this and refresh the page.");
         setStep("failed");
         return;
       }
@@ -187,7 +187,7 @@ export function MpesaPaymentModal({ open, onClose, initialPackageId }: Props) {
           )}
 
           {step === "waiting" && (
-            <WaitingStep selectedPkg={selectedPkg} kesAmount={kesAmount} phone={phone} />
+            <WaitingStep selectedPkg={selectedPkg} kesAmount={kesAmount} phone={phone} onCancel={() => { stopPolling(); setStep("phone"); }} />
           )}
 
           {step === "success" && (
@@ -360,7 +360,7 @@ function PhoneStep({
   );
 }
 
-function WaitingStep({ selectedPkg, kesAmount, phone }: { selectedPkg: Package; kesAmount: number; phone: string }) {
+function WaitingStep({ selectedPkg, kesAmount, phone, onCancel }: { selectedPkg: Package; kesAmount: number; phone: string; onCancel: () => void }) {
   return (
     <div className="p-6 flex flex-col items-center text-center space-y-5">
       <div className="relative">
@@ -395,7 +395,15 @@ function WaitingStep({ selectedPkg, kesAmount, phone }: { selectedPkg: Package; 
         <p>3. Premium activates automatically after payment</p>
       </div>
 
-      <p className="text-[10px] text-muted-foreground">Waiting for confirmation... (this may take up to 2 minutes)</p>
+      <p className="text-[10px] text-muted-foreground">Waiting for confirmation... (up to 90 seconds)</p>
+
+      <button
+        type="button"
+        onClick={onCancel}
+        className="w-full border border-border bg-card/60 font-medium py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
