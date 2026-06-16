@@ -50,6 +50,45 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_submissions: {
+        Row: {
+          id: string
+          email: string
+          package: string
+          price: number
+          duration_days: number
+          transaction_code: string
+          status: string
+          created_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          id?: string
+          email: string
+          package: string
+          price: number
+          duration_days: number
+          transaction_code: string
+          status?: string
+          created_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          id?: string
+          email?: string
+          package?: string
+          price?: number
+          duration_days?: number
+          transaction_code?: string
+          status?: string
+          created_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

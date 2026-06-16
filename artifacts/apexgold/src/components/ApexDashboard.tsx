@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Brain, Activity, TrendingUp, TrendingDown, Minus, Upload, Send, Sparkles,
-  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, MessageCircle, Clock, Target,
+  ImageIcon, ArrowUpRight, X, ChevronDown, Crown, Clock, Target,
   ShieldCheck, Zap, Loader2, Check, AlertTriangle, Layers, Droplet, GitBranch, BarChart3, Mail, LogOut, User as UserIcon, Save,
   RefreshCw, WifiOff, Server,
 } from "lucide-react";
@@ -11,6 +11,7 @@ import { useAccess } from "@/hooks/use-access";
 import { supabase } from "@/integrations/supabase/client";
 import { MyTradesSection } from "@/components/MyTradesSection";
 import { AlertsWatchlistSection } from "@/components/AlertsWatchlistSection";
+import { AdminPanel } from "@/components/AdminPanel";
 import { fetchGoldPrice } from "@/lib/gold-price";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -51,11 +52,6 @@ type Annotation = {
   setup?: TradeSetup;
 };
 
-const WHATSAPP_NUMBER = "254799415761";
-const WHATSAPP_MSG = encodeURIComponent(
-  "Hello ApexGold AI Team, I would like to subscribe to the premium membership plan. Please guide me through the payment and activation process."
-);
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MSG}`;
 const ADMIN_EMAIL = "apexgoldaiteam1@gmail.com";
 const FREE_TRIAL_LIMIT = 3;
 
@@ -129,18 +125,16 @@ function Header() {
       </div>
       <div className="ml-auto flex items-center gap-2">
         <a
-          href={WHATSAPP_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="hidden sm:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-border bg-card hover:border-gold/50 transition-colors"
+          href="#premium"
+          className="hidden sm:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-gold/50 bg-gold/10 text-gold hover:bg-gold/20 transition-colors font-semibold"
         >
-          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+          <Crown className="w-3.5 h-3.5" /> Premium
         </a>
         <a
           href={`mailto:${ADMIN_EMAIL}`}
           className="hidden md:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-border bg-card hover:border-gold/50 transition-colors"
         >
-          <Mail className="w-3.5 h-3.5" /> Admin
+          <Mail className="w-3.5 h-3.5" /> Contact
         </a>
         <ProfileMenu />
       </div>
@@ -1101,7 +1095,7 @@ function ScreenshotAnalyzer({ onSaved }: { onSaved?: () => void }) {
               <Crown className="w-5 h-5 text-gold mx-auto mb-1" />
               <p className="text-xs font-semibold">You've used your 3 free analyses</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Upgrade to Premium for unlimited chart analysis.</p>
-              <a href={WHATSAPP_URL} target="_blank" rel="noreferrer"
+              <a href="#premium"
                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gradient-gold text-primary-foreground shadow-gold">
                 <Crown className="w-3.5 h-3.5" /> Get Premium
               </a>
@@ -1415,23 +1409,63 @@ function SetupTile({ label, value, accent, icon: Icon }: { label: string; value:
 }
 
 /* ---------------- Premium ---------------- */
+const MPESA_TILL = "9354790";
+const PREMIUM_PLANS = [
+  { id: "2-weeks", name: "2 Weeks Access", price: 13, period: "14 days", days: 14 },
+  { id: "1-month", name: "1 Month Access", price: 20, period: "30 days", days: 30 },
+];
+
 function PremiumSection() {
-  const plans = [
-    { id: "2-weeks", name: "2 Weeks Access", price: 13, period: "14 days" },
-    { id: "1-month", name: "1 Month Access", price: 20, period: "30 days" },
-  ];
+  const { user } = useAuth();
   const [selected, setSelected] = useState<string>("1-month");
+  const [showForm, setShowForm] = useState(false);
+  const [txCode, setTxCode] = useState("");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   const features = [
     "Advanced AI analysis", "Unlimited chart analysis", "Priority screenshot review",
     "Premium gold trade setups", "Multi-timeframe bias", "Confidence scoring",
     "Exclusive gold trading insights",
   ];
-  const selectedPlan = plans.find((p) => p.id === selected) ?? plans[0];
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    `Hello ApexGold AI Team, I would like to subscribe to the ${selectedPlan.name} ($${selectedPlan.price} / ${selectedPlan.period}). Please guide me through the payment and activation.`
-  )}`;
+
+  const selectedPlan = PREMIUM_PLANS.find((p) => p.id === selected) ?? PREMIUM_PLANS[1];
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!txCode.trim()) { setFormError("Enter your M-Pesa transaction code."); return; }
+    if (!email.trim()) { setFormError("Enter your registration email."); return; }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from("payment_submissions").insert({
+        email: email.trim().toLowerCase(),
+        package: selectedPlan.name,
+        price: selectedPlan.price,
+        duration_days: selectedPlan.days,
+        transaction_code: txCode.trim().toUpperCase(),
+        status: "pending",
+      });
+      if (error) throw error;
+      setSubmitted(true);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Submission failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSelectPlan = (id: string) => {
+    setSelected(id);
+    setShowForm(false);
+    setSubmitted(false);
+    setFormError(null);
+  };
+
   return (
-    <section className="rounded-2xl bg-gradient-card border border-gold/30 p-4 sm:p-5 animate-fade-up relative overflow-hidden">
+    <section className="rounded-2xl bg-gradient-card border border-gold/30 p-4 sm:p-5 animate-fade-up relative overflow-hidden" id="premium">
       <div className="absolute inset-0 opacity-30 pointer-events-none"
         style={{ background: "radial-gradient(ellipse 60% 80% at 50% 0%, color-mix(in oklab, var(--gold) 30%, transparent), transparent)" }} />
       <div className="relative">
@@ -1441,8 +1475,9 @@ function PremiumSection() {
         </div>
         <p className="text-[11px] text-muted-foreground mb-3">Unlock the full institutional-grade ApexGold AI experience.</p>
 
+        {/* Plan cards — unchanged */}
         <div role="radiogroup" aria-label="Subscription plan" className="grid grid-cols-2 gap-2 mb-3">
-          {plans.map((p) => {
+          {PREMIUM_PLANS.map((p) => {
             const active = selected === p.id;
             return (
               <button
@@ -1450,7 +1485,7 @@ function PremiumSection() {
                 role="radio"
                 aria-checked={active}
                 key={p.id}
-                onClick={() => setSelected(p.id)}
+                onClick={() => handleSelectPlan(p.id)}
                 className={`rounded-xl border p-3 text-center relative transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
                   active
                     ? "border-gold bg-gold/10 shadow-[0_0_24px_-8px_var(--gold)]"
@@ -1470,6 +1505,7 @@ function PremiumSection() {
           })}
         </div>
 
+        {/* Features */}
         <ul className="space-y-1.5 mb-4">
           {features.map((f) => (
             <li key={f} className="flex items-center gap-2 text-xs">
@@ -1481,145 +1517,103 @@ function PremiumSection() {
           ))}
         </ul>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <a href={whatsappUrl} target="_blank" rel="noreferrer"
-             className="bg-gradient-gold text-primary-foreground font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-gold hover:opacity-90 transition-opacity">
-            <Crown className="w-4 h-4" /> Subscribe — ${selectedPlan.price}
-          </a>
-          <a href={whatsappUrl} target="_blank" rel="noreferrer"
-             className="border border-border bg-card/60 hover:border-gold/50 hover:bg-card font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
-            <MessageCircle className="w-4 h-4 text-bullish" /> Contact on WhatsApp
-          </a>
-        </div>
-        <p className="text-[10px] text-muted-foreground text-center mt-2">Contact the team: <a className="text-gold hover:underline" href={`mailto:${ADMIN_EMAIL}`}>{ADMIN_EMAIL}</a></p>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Admin Panel ---------------- */
-function AdminPanel() {
-  const { isAdmin, loading } = useAccess();
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("1 Month Access");
-  const [days, setDays] = useState(30);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  const [subs, setSubs] = useState<Array<{ id: string; user_id: string; plan: string; status: string; expires_at: string; email?: string }>>([]);
-
-  const loadSubs = async () => {
-    const { data } = await supabase
-      .from("subscriptions")
-      .select("id, user_id, plan, status, expires_at")
-      .order("expires_at", { ascending: false })
-      .limit(50);
-    if (!data) return;
-    const ids = Array.from(new Set(data.map((s) => s.user_id)));
-    const { data: profs } = await supabase.from("profiles").select("id, email").in("id", ids);
-    const map = new Map((profs ?? []).map((p) => [p.id, p.email]));
-    setSubs(data.map((s) => ({ ...s, email: map.get(s.user_id) })));
-  };
-
-  useEffect(() => { if (isAdmin) loadSubs(); }, [isAdmin]);
-
-  if (loading || !isAdmin) return null;
-
-  const grant = async () => {
-    setBusy(true); setMsg(null);
-    try {
-      const { data: prof, error: pErr } = await supabase
-        .from("profiles").select("id").eq("email", email.trim().toLowerCase()).maybeSingle();
-      if (pErr) throw pErr;
-      if (!prof) throw new Error("No user with that email. They must sign up first.");
-      const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from("subscriptions").insert({
-        user_id: prof.id, plan, status: "active", expires_at: expires,
-      });
-      if (error) throw error;
-      setMsg({ tone: "ok", text: `Granted ${plan} until ${new Date(expires).toLocaleDateString()}.` });
-      setEmail("");
-      await loadSubs();
-    } catch (e) {
-      setMsg({ tone: "err", text: e instanceof Error ? e.message : "Failed to grant subscription." });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const terminate = async (id: string) => {
-    setBusy(true);
-    const { error } = await supabase
-      .from("subscriptions")
-      .update({ status: "terminated", expires_at: new Date().toISOString() })
-      .eq("id", id);
-    setBusy(false);
-    if (error) { setMsg({ tone: "err", text: error.message }); return; }
-    setMsg({ tone: "ok", text: "Subscription terminated." });
-    await loadSubs();
-  };
-
-  return (
-    <section className="rounded-2xl bg-gradient-card border border-gold/40 p-4 sm:p-5 animate-fade-up">
-      <div className="flex items-center gap-2 mb-3">
-        <ShieldCheck className="w-4 h-4 text-gold" />
-        <h3 className="text-sm font-semibold">Admin · Subscriptions</h3>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
-        <input
-          type="email" placeholder="user@email.com" value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="sm:col-span-2 bg-card border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-gold/60"
-        />
-        <select
-          value={plan} onChange={(e) => {
-            const v = e.target.value; setPlan(v); setDays(v.startsWith("2 Weeks") ? 14 : 30);
-          }}
-          className="bg-card border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-gold/60"
-        >
-          <option>2 Weeks Access</option>
-          <option>1 Month Access</option>
-        </select>
-        <button
-          type="button" disabled={busy || !email}
-          onClick={grant}
-          className="bg-gradient-gold text-primary-foreground font-semibold rounded-lg text-xs disabled:opacity-50 px-3 py-2"
-        >
-          {busy ? "Working…" : "Grant"}
-        </button>
-      </div>
-
-      {msg && (
-        <p className={`text-[11px] mb-2 ${msg.tone === "ok" ? "text-bullish" : "text-bearish"}`}>{msg.text}</p>
-      )}
-
-      <div className="border border-border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground bg-card/60">
-          <span>User</span><span>Plan</span><span>Expires</span><span></span>
-        </div>
-        {subs.length === 0 && (
-          <p className="px-3 py-3 text-[11px] text-muted-foreground">No subscriptions yet.</p>
-        )}
-        {subs.map((s) => {
-          const expired = new Date(s.expires_at) <= new Date() || s.status !== "active";
-          return (
-            <div key={s.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-3 py-2 text-xs items-center border-t border-border">
-              <span className="truncate">{s.email ?? s.user_id.slice(0, 8)}</span>
-              <span className="text-muted-foreground">{s.plan}</span>
-              <span className={expired ? "text-bearish" : "text-gold"}>
-                {new Date(s.expires_at).toLocaleDateString()}
-              </span>
-              {!expired ? (
-                <button onClick={() => terminate(s.id)} disabled={busy}
-                  className="text-[10px] px-2 py-1 rounded border border-bearish/40 text-bearish hover:bg-bearish/10">
-                  Terminate
-                </button>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">{s.status === "terminated" ? "Terminated" : "Expired"}</span>
-              )}
+        {/* CTA area */}
+        {submitted ? (
+          <div className="rounded-xl border border-bullish/40 bg-bullish/5 p-4 text-center space-y-2">
+            <div className="w-8 h-8 rounded-full bg-bullish/15 flex items-center justify-center mx-auto">
+              <Check className="w-4 h-4 text-bullish" />
             </div>
-          );
-        })}
+            <p className="text-sm font-semibold text-bullish">Payment submitted!</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Your submission is pending review. Premium access will be activated once payment is verified by the team.
+            </p>
+          </div>
+        ) : !showForm ? (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="w-full bg-gradient-gold text-primary-foreground font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-gold hover:opacity-90 transition-opacity"
+          >
+            <Crown className="w-4 h-4" /> Pay via M-Pesa — ${selectedPlan.price}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            {/* Selected package summary */}
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gold/10 border border-gold/30">
+              <span className="text-xs font-semibold">{selectedPlan.name}</span>
+              <span className="text-sm font-black text-gradient-gold">${selectedPlan.price}</span>
+            </div>
+
+            {/* Payment instructions */}
+            <div className="rounded-xl border border-border bg-card/60 p-3 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Payment Instructions</p>
+              <p className="text-xs text-foreground/90 leading-relaxed">
+                Pay via M-Pesa Till Number:{" "}
+                <span className="font-bold text-gold tabular-nums">{MPESA_TILL}</span>.
+                After payment, enter your M-Pesa transaction code and the email used to register your account.
+                Your premium access will be activated after payment verification.
+              </p>
+            </div>
+
+            {/* Submission form */}
+            <form onSubmit={handleSubmit} className="space-y-2.5">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  M-Pesa Transaction Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. QA12B3XYZ4"
+                  value={txCode}
+                  onChange={(e) => setTxCode(e.target.value)}
+                  required
+                  autoComplete="off"
+                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-xs font-mono uppercase tracking-widest focus:outline-none focus:border-gold/60 placeholder:normal-case placeholder:tracking-normal"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  Registration Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-xs focus:outline-none focus:border-gold/60"
+                />
+              </div>
+
+              {formError && (
+                <p className="text-[11px] text-bearish">{formError}</p>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setFormError(null); }}
+                  className="border border-border bg-card/60 text-xs font-semibold py-2.5 rounded-xl hover:border-gold/40 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-gradient-gold text-primary-foreground font-semibold text-xs py-2.5 rounded-xl shadow-gold hover:opacity-90 disabled:opacity-60 transition-opacity flex items-center justify-center gap-1.5"
+                >
+                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {submitting ? "Submitting…" : "Submit Payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        <p className="text-[10px] text-muted-foreground text-center mt-3">
+          Questions?{" "}
+          <a className="text-gold hover:underline" href={`mailto:${ADMIN_EMAIL}`}>{ADMIN_EMAIL}</a>
+        </p>
       </div>
     </section>
   );
