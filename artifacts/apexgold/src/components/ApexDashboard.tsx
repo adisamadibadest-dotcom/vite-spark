@@ -1410,14 +1410,16 @@ function SetupTile({ label, value, accent, icon: Icon }: { label: string; value:
 
 /* ---------------- Premium ---------------- */
 const MPESA_TILL = "9354790";
+const USD_TO_KES = 130;
 const PREMIUM_PLANS = [
-  { id: "2-weeks", name: "2 Weeks Access", price: 13, period: "14 days", days: 14 },
-  { id: "1-month", name: "1 Month Access", price: 20, period: "30 days", days: 30 },
+  { id: "1-week",  name: "1 Week Access",  price: 7,  kes: Math.round(7  * USD_TO_KES), period: "7 days",  days: 7  },
+  { id: "2-weeks", name: "2 Weeks Access", price: 14, kes: Math.round(14 * USD_TO_KES), period: "14 days", days: 14 },
+  { id: "1-month", name: "1 Month Access", price: 28, kes: Math.round(28 * USD_TO_KES), period: "30 days", days: 30 },
 ];
 
 function PremiumSection() {
   const { user } = useAuth();
-  const [selected, setSelected] = useState<string>("1-month");
+  const [selected, setSelected] = useState<string>("2-weeks");
   const [showForm, setShowForm] = useState(false);
   const [txCode, setTxCode] = useState("");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -1475,8 +1477,8 @@ function PremiumSection() {
         </div>
         <p className="text-[11px] text-muted-foreground mb-3">Unlock the full institutional-grade ApexGold AI experience.</p>
 
-        {/* Plan cards — unchanged */}
-        <div role="radiogroup" aria-label="Subscription plan" className="grid grid-cols-2 gap-2 mb-3">
+        {/* Plan cards */}
+        <div role="radiogroup" aria-label="Subscription plan" className="grid grid-cols-3 gap-2 mb-3">
           {PREMIUM_PLANS.map((p) => {
             const active = selected === p.id;
             return (
@@ -1493,13 +1495,14 @@ function PremiumSection() {
                 }`}
               >
                 {active && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-gradient-gold text-primary-foreground px-2 py-0.5 rounded-full">
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-gradient-gold text-primary-foreground px-2 py-0.5 rounded-full whitespace-nowrap">
                     SELECTED
                   </span>
                 )}
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{p.name}</div>
-                <div className="text-2xl font-black text-gradient-gold mt-1 tabular-nums">${p.price}</div>
-                <div className="text-[10px] text-muted-foreground">for {p.period}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">{p.name}</div>
+                <div className="text-xl font-black text-gradient-gold mt-1 tabular-nums">${p.price}</div>
+                <div className="text-[10px] text-gold/70 font-semibold tabular-nums">KES {p.kes.toLocaleString()}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{p.period}</div>
               </button>
             );
           })}
@@ -1534,14 +1537,17 @@ function PremiumSection() {
             onClick={() => setShowForm(true)}
             className="w-full bg-gradient-gold text-primary-foreground font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-gold hover:opacity-90 transition-opacity"
           >
-            <Crown className="w-4 h-4" /> Pay via M-Pesa — ${selectedPlan.price}
+            <Crown className="w-4 h-4" /> Pay via M-Pesa — ${selectedPlan.price} <span className="opacity-75 text-xs">(KES {selectedPlan.kes.toLocaleString()})</span>
           </button>
         ) : (
           <div className="space-y-3">
             {/* Selected package summary */}
             <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gold/10 border border-gold/30">
               <span className="text-xs font-semibold">{selectedPlan.name}</span>
-              <span className="text-sm font-black text-gradient-gold">${selectedPlan.price}</span>
+              <div className="text-right">
+                <span className="text-sm font-black text-gradient-gold">${selectedPlan.price}</span>
+                <span className="text-[10px] text-gold/70 ml-1.5">KES {selectedPlan.kes.toLocaleString()}</span>
+              </div>
             </div>
 
             {/* Payment instructions */}

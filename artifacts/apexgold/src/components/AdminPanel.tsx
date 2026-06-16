@@ -30,6 +30,7 @@ type ActiveSub = {
 };
 
 const PLAN_DAYS: Record<string, number> = {
+  "1 Week Access":  7,
   "2 Weeks Access": 14,
   "1 Month Access": 30,
 };
@@ -339,7 +340,7 @@ function SubmissionRow({
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold truncate">{sub.email}</p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {sub.package} · ${sub.price} · {new Date(sub.created_at).toLocaleString()}
+            {sub.package} · ${sub.price} · KES {(sub.price * 130).toLocaleString()} · {new Date(sub.created_at).toLocaleString()}
           </p>
         </div>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shrink-0 ${statusCfg.color}`}>
